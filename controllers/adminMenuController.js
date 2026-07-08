@@ -36,11 +36,15 @@ exports.publishMenu = catchAsync(async (req, res) => {
   const allDishIds = [...new Set(days.flatMap((d) => (Array.isArray(d.dishes) ? d.dishes : [])))];
   await validateDishIds(allDishIds);
 
-  const menu = await Menu.findOneAndUpdate(
-    { weekStart },
-    { weekStart, weekEnd, days, published: true },
-    { new: true, upsert: true, overwrite: true, setDefaultsOnInsert: true }
-  );
+  let menu = await Menu.findOne({ weekStart });
+  if (menu) {
+    menu.weekEnd = weekEnd;
+    menu.days = days;
+    menu.published = true;
+    await menu.save();
+  } else {
+    menu = await Menu.create({ weekStart, weekEnd, days, published: true });
+  }
 
   res.status(200).json({
     success: true,
