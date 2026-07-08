@@ -1,11 +1,11 @@
 const Order = require("../models/Order");
-const Menu = require("../models/Menu");
 const Workspace = require("../models/Workspace");
 const Cart = require("../models/Cart");
 const AppError = require("../utils/appError");
 const catchAsync = require("../utils/catchAsync");
 const { generateDailyRef } = require("../utils/generateRef");
 const validatePromoCode = require("../utils/validatePromoCode");
+const { getWeekdayCode, getStandardDishesForDay } = require("../utils/standardMenu");
 
 const CUTOFF_HOUR = 22;
 
@@ -31,19 +31,19 @@ exports.createOrder = catchAsync(async (req, res) => {
     throw new AppError("Order cutoff passed. Please order before 10:00 PM the night before.", 400);
   }
 
-  const menu = await Menu.findOne({ "days.date": deliveryDate }).populate("days.dishes");
-  if (!menu) {
-    throw new AppError("Menu not available for the selected delivery date", 400);
+  const weekdayCode = getWeekdayCode(deliveryDate);
+  if (weekdayCode === "Sat" || weekdayCode === "Sun") {
+    throw new AppError("Kitchen is closed on the selected delivery date", 400);
   }
 
-  const day = menu.days.find((d) => d.date === deliveryDate);
-  if (!day || day.closed) {
-    throw new AppError("Kitchen is closed on the selected delivery date", 400);
+  const availableDishes = await getStandardDishesForDay(weekdayCode);
+  if (availableDishes.length === 0) {
+    throw new AppError("Menu not available for the selected delivery date", 400);
   }
 
   let subtotal = 0;
   const orderItems = items.map((item) => {
-    const dish = day.dishes.find((d) => d._id.toString() === String(item.dishId));
+    const dish = availableDishes.find((d) => d._id.toString() === String(item.dishId));
     if (!dish) {
       throw new AppError(`Dish not found: ${item.dishId}`, 400);
     }

@@ -1,28 +1,20 @@
-const Menu = require("../models/Menu");
-const AppError = require("../utils/appError");
 const catchAsync = require("../utils/catchAsync");
-
-const todayIso = () => new Date().toISOString().slice(0, 10);
+const { getCurrentWeekMonToFri, getStandardDishesForDay } = require("../utils/standardMenu");
 
 exports.getCurrentMenu = catchAsync(async (req, res) => {
-  const today = todayIso();
+  const weekDays = getCurrentWeekMonToFri();
 
-  let menu = await Menu.findOne({ weekStart: { $lte: today }, weekEnd: { $gte: today } }).populate(
-    "days.dishes"
+  const days = await Promise.all(
+    weekDays.map(async ({ day, date, weekdayCode }) => {
+      const dishes = await getStandardDishesForDay(weekdayCode);
+      return { day, date, theme: "", closed: false, dishes };
+    })
   );
-
-  if (!menu) {
-    menu = await Menu.findOne().sort({ weekStart: -1 }).populate("days.dishes");
-  }
-
-  if (!menu) {
-    throw new AppError("No menu is currently available", 404);
-  }
 
   res.status(200).json({
     success: true,
-    weekStart: menu.weekStart,
-    weekEnd: menu.weekEnd,
-    days: menu.days,
+    weekStart: weekDays[0].date,
+    weekEnd: weekDays[weekDays.length - 1].date,
+    days,
   });
 });
