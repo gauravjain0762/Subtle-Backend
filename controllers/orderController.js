@@ -69,7 +69,7 @@ exports.createOrder = catchAsync(async (req, res) => {
       qty,
       addons: addonNames,
       unitPrice,
-      img: dish.img,
+      images: dish.images,
     };
   });
 

@@ -19,7 +19,7 @@ const dishSchema = new mongoose.Schema({
   fat: Number,
   tags: [{ type: String }],
   allergens: { type: String, trim: true },
-  img: { type: String, trim: true },
+  images: { type: [String], default: [] },
   addons: [addonSchema],
 });
 
