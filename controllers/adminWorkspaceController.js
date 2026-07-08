@@ -1,0 +1,63 @@
+const Workspace = require("../models/Workspace");
+const User = require("../models/User");
+const Order = require("../models/Order");
+const AppError = require("../utils/appError");
+const catchAsync = require("../utils/catchAsync");
+
+exports.listWorkspaces = catchAsync(async (req, res) => {
+  const workspaces = await Workspace.find().sort({ createdAt: -1 });
+  const codes = workspaces.map((w) => w.code);
+
+  const [userCounts, orderCounts] = await Promise.all([
+    User.aggregate([
+      { $match: { workspaceCode: { $in: codes } } },
+      { $group: { _id: "$workspaceCode", count: { $sum: 1 } } },
+    ]),
+    Order.aggregate([
+      { $match: { workspaceCode: { $in: codes } } },
+      { $group: { _id: "$workspaceCode", count: { $sum: 1 } } },
+    ]),
+  ]);
+
+  const userCountMap = Object.fromEntries(userCounts.map((u) => [u._id, u.count]));
+  const orderCountMap = Object.fromEntries(orderCounts.map((o) => [o._id, o.count]));
+
+  const result = workspaces.map((w) => ({
+    _id: w._id,
+    code: w.code,
+    name: w.name,
+    town: w.town,
+    city: w.city,
+    postcode: w.postcode,
+    deliveryTimes: w.deliveryTimes,
+    employees: w.employees,
+    premiseType: w.premiseType,
+    status: w.status,
+    totalUsers: userCountMap[w.code] || 0,
+    totalOrders: orderCountMap[w.code] || 0,
+    createdAt: w.createdAt,
+  }));
+
+  res.status(200).json({ success: true, workspaces: result });
+});
+
+exports.updateWorkspaceStatus = catchAsync(async (req, res) => {
+  const { status } = req.body || {};
+
+  if (!["active", "suspended"].includes(status)) {
+    throw new AppError("Invalid status", 400);
+  }
+
+  const workspace = await Workspace.findById(req.params.id);
+  if (!workspace) {
+    throw new AppError("Workspace not found", 404);
+  }
+
+  workspace.status = status;
+  await workspace.save();
+
+  res.status(200).json({
+    success: true,
+    workspace: { _id: workspace._id, status: workspace.status },
+  });
+});
