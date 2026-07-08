@@ -52,6 +52,17 @@ exports.publishMenu = catchAsync(async (req, res) => {
   });
 });
 
+exports.deleteMenu = catchAsync(async (req, res) => {
+  const { weekStart } = req.params;
+
+  const menu = await Menu.findOneAndDelete({ weekStart });
+  if (!menu) {
+    throw new AppError("Menu week not found", 404);
+  }
+
+  res.status(200).json({ success: true, message: `Menu week ${weekStart} deleted` });
+});
+
 exports.assignDishesToDay = catchAsync(async (req, res) => {
   const { weekStart, day } = req.params;
   const { dishIds } = req.body || {};

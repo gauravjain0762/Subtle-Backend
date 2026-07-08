@@ -10,7 +10,7 @@ const {
 } = require("../controllers/adminWorkspaceRequestController");
 const { listWorkspaces, updateWorkspaceStatus } = require("../controllers/adminWorkspaceController");
 const { listOrders, updateOrderStatus } = require("../controllers/adminOrderController");
-const { publishMenu, assignDishesToDay } = require("../controllers/adminMenuController");
+const { publishMenu, assignDishesToDay, deleteMenu } = require("../controllers/adminMenuController");
 const {
   createDish,
   listDishes,
@@ -51,6 +51,7 @@ router.delete("/dishes/:id", deleteDish);
 
 router.put("/menu", publishMenu);
 router.patch("/menu/:weekStart/days/:day/dishes", assignDishesToDay);
+router.delete("/menu/:weekStart", deleteMenu);
 
 router.post("/promo-codes", createPromoCode);
 router.get("/promo-codes", listPromoCodes);
