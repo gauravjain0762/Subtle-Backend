@@ -1,6 +1,7 @@
 const Order = require("../models/Order");
 const Menu = require("../models/Menu");
 const Workspace = require("../models/Workspace");
+const Cart = require("../models/Cart");
 const AppError = require("../utils/appError");
 const catchAsync = require("../utils/catchAsync");
 const { generateDailyRef } = require("../utils/generateRef");
@@ -46,28 +47,37 @@ exports.createOrder = catchAsync(async (req, res) => {
       throw new AppError(`Dish not found: ${item.dishId}`, 400);
     }
 
-    const portion = item.portion === "large" ? "large" : "regular";
     const qty = Number(item.qty) > 0 ? Number(item.qty) : 1;
-    const addonNames = Array.isArray(item.addons) ? item.addons : [];
 
-    let unitPrice = portion === "large" ? dish.price + (dish.largePriceExtra || 0) : dish.price;
+    let portionSize = null;
+    let unitPrice;
 
-    addonNames.forEach((addonName) => {
-      const addon = dish.addons.find((a) => a.name === addonName);
-      if (!addon) {
-        throw new AppError(`Invalid addon: ${addonName}`, 400);
+    if (Array.isArray(dish.portions) && dish.portions.length > 0) {
+      const matchedPortion = item.portionSize
+        ? dish.portions.find((p) => p.size.toLowerCase() === String(item.portionSize).toLowerCase())
+        : dish.portions[0];
+
+      if (!matchedPortion) {
+        throw new AppError(`Invalid portion size: ${item.portionSize}`, 400);
       }
-      unitPrice += addon.price;
-    });
+
+      portionSize = matchedPortion.size;
+      unitPrice = Number(matchedPortion.price);
+    } else {
+      unitPrice = Number(dish.price);
+    }
+
+    if (Number.isNaN(unitPrice)) {
+      throw new AppError(`Dish ${dish.name} has an invalid price`, 400);
+    }
 
     subtotal += unitPrice * qty;
 
     return {
       dishId: dish._id,
       dishName: dish.name,
-      portion,
+      portionSize,
       qty,
-      addons: addonNames,
       unitPrice,
       images: dish.images,
     };
@@ -91,6 +101,8 @@ exports.createOrder = catchAsync(async (req, res) => {
     total,
     isWeeklySubscription: Boolean(isWeeklySubscription),
   });
+
+  await Cart.deleteOne({ user: req.user._id });
 
   res.status(201).json({
     success: true,

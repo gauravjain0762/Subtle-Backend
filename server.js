@@ -16,6 +16,7 @@ const menuRoutes = require("./routes/menuRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const subscriptionRoutes = require("./routes/subscriptionRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const cartRoutes = require("./routes/cartRoutes");
 
 connectDB();
 
@@ -39,6 +40,7 @@ app.use("/api/menu", menuRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/cart", cartRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ success: false, error: "Route not found" });

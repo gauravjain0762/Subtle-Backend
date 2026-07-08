@@ -4,9 +4,8 @@ const orderItemSchema = new mongoose.Schema(
   {
     dishId: { type: mongoose.Schema.Types.ObjectId, required: true },
     dishName: { type: String, required: true },
-    portion: { type: String, enum: ["regular", "large"], default: "regular" },
+    portionSize: { type: String },
     qty: { type: Number, required: true, min: 1 },
-    addons: [{ type: String }],
     unitPrice: { type: Number, required: true },
     images: { type: [String], default: [] },
   },
