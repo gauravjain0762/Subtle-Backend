@@ -1,5 +1,6 @@
 const express = require("express");
 const adminProtect = require("../middleware/adminAuth");
+const upload = require("../middleware/upload");
 
 const { login } = require("../controllers/adminAuthController");
 const {
@@ -28,9 +29,9 @@ router.patch("/workspaces/:id", updateWorkspaceStatus);
 router.get("/orders", listOrders);
 router.patch("/orders/:id/status", updateOrderStatus);
 
-router.post("/dishes", createDish);
+router.post("/dishes", upload.array("images", 5), createDish);
 router.get("/dishes", listDishes);
-router.patch("/dishes/:id", updateDish);
+router.patch("/dishes/:id", upload.array("images", 5), updateDish);
 router.delete("/dishes/:id", deleteDish);
 
 router.put("/menu", publishMenu);
