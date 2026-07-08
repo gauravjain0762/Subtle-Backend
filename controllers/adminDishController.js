@@ -76,6 +76,32 @@ exports.listDishes = catchAsync(async (req, res) => {
   res.status(200).json({ success: true, dishes });
 });
 
+exports.getDish = catchAsync(async (req, res) => {
+  const dish = await Dish.findById(req.params.id);
+
+  if (!dish) {
+    throw new AppError("Dish not found", 404);
+  }
+
+  res.status(200).json({ success: true, dish });
+});
+
+exports.setDishAvailability = catchAsync(async (req, res) => {
+  const { available } = req.body || {};
+
+  if (typeof available !== "boolean") {
+    throw new AppError("available must be true or false", 400);
+  }
+
+  const dish = await Dish.findByIdAndUpdate(req.params.id, { available }, { new: true });
+
+  if (!dish) {
+    throw new AppError("Dish not found", 404);
+  }
+
+  res.status(200).json({ success: true, dish });
+});
+
 exports.updateDish = catchAsync(async (req, res) => {
   const data = await buildDishData(req);
 

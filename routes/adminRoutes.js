@@ -11,7 +11,14 @@ const {
 const { listWorkspaces, updateWorkspaceStatus } = require("../controllers/adminWorkspaceController");
 const { listOrders, updateOrderStatus } = require("../controllers/adminOrderController");
 const { publishMenu, assignDishesToDay } = require("../controllers/adminMenuController");
-const { createDish, listDishes, updateDish, deleteDish } = require("../controllers/adminDishController");
+const {
+  createDish,
+  listDishes,
+  getDish,
+  updateDish,
+  setDishAvailability,
+  deleteDish,
+} = require("../controllers/adminDishController");
 
 const router = express.Router();
 
@@ -31,7 +38,9 @@ router.patch("/orders/:id/status", updateOrderStatus);
 
 router.post("/dishes", upload.array("images", 5), createDish);
 router.get("/dishes", listDishes);
+router.get("/dishes/:id", getDish);
 router.patch("/dishes/:id", upload.array("images", 5), updateDish);
+router.patch("/dishes/:id/availability", setDishAvailability);
 router.delete("/dishes/:id", deleteDish);
 
 router.put("/menu", publishMenu);
