@@ -4,9 +4,10 @@ const catchAsync = require("../utils/catchAsync");
 const uploadImageBuffer = require("../utils/uploadImageBuffer");
 const { parseJsonField } = require("../utils/parseFormField");
 
-const STRING_FIELDS = ["name", "desc", "allergens"];
-const NUMBER_FIELDS = ["price", "largePriceExtra", "kcal", "protein", "carbs", "fat"];
-const ARRAY_FIELDS = ["tags", "addons", "images"];
+const STRING_FIELDS = ["name", "price", "description", "category", "menuId"];
+const NUMBER_FIELDS = ["kcal", "protein", "carbs", "fat"];
+const BOOLEAN_FIELDS = ["available", "popular", "vegan"];
+const ARRAY_FIELDS = ["allergens", "tags", "ingredients", "portions", "availableDays", "images"];
 
 const buildDishData = async (req) => {
   const body = req.body || {};
@@ -23,6 +24,16 @@ const buildDishData = async (req) => {
         throw new AppError(`${field} must be a number`, 400);
       }
       data[field] = num;
+    }
+  });
+
+  BOOLEAN_FIELDS.forEach((field) => {
+    if (body[field] !== undefined) {
+      const parsed = parseJsonField(body[field]);
+      if (typeof parsed !== "boolean") {
+        throw new AppError(`${field} must be true or false`, 400);
+      }
+      data[field] = parsed;
     }
   });
 
