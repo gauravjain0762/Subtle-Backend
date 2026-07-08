@@ -72,6 +72,21 @@ exports.createOrder = catchAsync(async (req, res) => {
       throw new AppError(`Dish ${dish.name} has an invalid price`, 400);
     }
 
+    const addonNames = Array.isArray(item.addons) ? item.addons : [];
+    addonNames.forEach((addonName) => {
+      const ingredient = (dish.ingredients || []).find((i) => i.name === addonName);
+      if (!ingredient || ingredient.price === undefined || ingredient.price === null || ingredient.price === "") {
+        throw new AppError(`Invalid addon: ${addonName}`, 400);
+      }
+
+      const addonPrice = Number(ingredient.price);
+      if (Number.isNaN(addonPrice)) {
+        throw new AppError(`Addon ${addonName} has an invalid price`, 400);
+      }
+
+      unitPrice += addonPrice;
+    });
+
     subtotal += unitPrice * qty;
 
     return {
@@ -79,6 +94,7 @@ exports.createOrder = catchAsync(async (req, res) => {
       dishName: dish.name,
       portionSize,
       qty,
+      addons: addonNames,
       unitPrice,
       images: dish.images,
     };

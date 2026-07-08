@@ -4,6 +4,7 @@ const ingredientSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
     gramsPerMeal: Number,
+    price: { type: String },
   },
   { _id: false }
 );
