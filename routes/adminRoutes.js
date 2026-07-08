@@ -19,6 +19,12 @@ const {
   setDishAvailability,
   deleteDish,
 } = require("../controllers/adminDishController");
+const {
+  createPromoCode,
+  listPromoCodes,
+  updatePromoCode,
+  deletePromoCode,
+} = require("../controllers/adminPromoController");
 
 const router = express.Router();
 
@@ -45,5 +51,10 @@ router.delete("/dishes/:id", deleteDish);
 
 router.put("/menu", publishMenu);
 router.patch("/menu/:weekStart/days/:day/dishes", assignDishesToDay);
+
+router.post("/promo-codes", createPromoCode);
+router.get("/promo-codes", listPromoCodes);
+router.patch("/promo-codes/:id", updatePromoCode);
+router.delete("/promo-codes/:id", deletePromoCode);
 
 module.exports = router;

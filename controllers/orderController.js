@@ -5,6 +5,7 @@ const Cart = require("../models/Cart");
 const AppError = require("../utils/appError");
 const catchAsync = require("../utils/catchAsync");
 const { generateDailyRef } = require("../utils/generateRef");
+const validatePromoCode = require("../utils/validatePromoCode");
 
 const CUTOFF_HOUR = 22;
 
@@ -15,7 +16,7 @@ const isPastCutoff = (deliveryDate) => {
 };
 
 exports.createOrder = catchAsync(async (req, res) => {
-  const { workspaceCode, deliveryDate, lunchTime, items, isWeeklySubscription } = req.body || {};
+  const { workspaceCode, deliveryDate, lunchTime, items, isWeeklySubscription, promoCode } = req.body || {};
 
   if (!workspaceCode || !deliveryDate || !lunchTime || !Array.isArray(items) || items.length === 0) {
     throw new AppError("Missing required order fields", 400);
@@ -84,7 +85,25 @@ exports.createOrder = catchAsync(async (req, res) => {
   });
 
   subtotal = Math.round(subtotal * 100) / 100;
-  const total = subtotal;
+
+  let discount;
+  let appliedPromoCode;
+  let total = subtotal;
+
+  if (promoCode) {
+    const promoResult = await validatePromoCode(promoCode, workspaceCode);
+    if (!promoResult.valid) {
+      throw new AppError(promoResult.error, 400);
+    }
+
+    const { type, value, label } = promoResult.discount;
+    const rawAmount = type === "percentage" ? subtotal * (value / 100) : value;
+    const amount = Math.min(Math.round(rawAmount * 100) / 100, subtotal);
+
+    appliedPromoCode = promoResult.code;
+    discount = { type, value, amount, label };
+    total = Math.round((subtotal - amount) * 100) / 100;
+  }
 
   const dateStr = deliveryDate.replace(/-/g, "");
   const orderRef = await generateDailyRef(Order, "orderRef", "SK", dateStr);
@@ -98,6 +117,8 @@ exports.createOrder = catchAsync(async (req, res) => {
     lunchTime,
     items: orderItems,
     subtotal,
+    promoCode: appliedPromoCode,
+    discount,
     total,
     isWeeklySubscription: Boolean(isWeeklySubscription),
   });

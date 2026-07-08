@@ -12,6 +12,16 @@ const orderItemSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const discountSchema = new mongoose.Schema(
+  {
+    type: { type: String, enum: ["percentage", "fixed"] },
+    value: Number,
+    amount: Number,
+    label: String,
+  },
+  { _id: false }
+);
+
 const orderSchema = new mongoose.Schema(
   {
     orderRef: { type: String, required: true, unique: true },
@@ -22,6 +32,8 @@ const orderSchema = new mongoose.Schema(
     lunchTime: { type: String, required: true },
     items: [orderItemSchema],
     subtotal: { type: Number, required: true },
+    promoCode: { type: String, uppercase: true, trim: true },
+    discount: discountSchema,
     total: { type: Number, required: true },
     isWeeklySubscription: { type: Boolean, default: false },
     status: {
