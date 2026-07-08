@@ -7,10 +7,12 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 exports.getCurrentMenu = catchAsync(async (req, res) => {
   const today = todayIso();
 
-  let menu = await Menu.findOne({ weekStart: { $lte: today }, weekEnd: { $gte: today } });
+  let menu = await Menu.findOne({ weekStart: { $lte: today }, weekEnd: { $gte: today } }).populate(
+    "days.dishes"
+  );
 
   if (!menu) {
-    menu = await Menu.findOne().sort({ weekStart: -1 });
+    menu = await Menu.findOne().sort({ weekStart: -1 }).populate("days.dishes");
   }
 
   if (!menu) {

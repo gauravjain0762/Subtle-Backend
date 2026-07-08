@@ -29,7 +29,7 @@ exports.createOrder = catchAsync(async (req, res) => {
     throw new AppError("Order cutoff passed. Please order before 10:00 PM the night before.", 400);
   }
 
-  const menu = await Menu.findOne({ "days.date": deliveryDate });
+  const menu = await Menu.findOne({ "days.date": deliveryDate }).populate("days.dishes");
   if (!menu) {
     throw new AppError("Menu not available for the selected delivery date", 400);
   }
@@ -41,7 +41,7 @@ exports.createOrder = catchAsync(async (req, res) => {
 
   let subtotal = 0;
   const orderItems = items.map((item) => {
-    const dish = day.dishes.id(item.dishId);
+    const dish = day.dishes.find((d) => d._id.toString() === String(item.dishId));
     if (!dish) {
       throw new AppError(`Dish not found: ${item.dishId}`, 400);
     }

@@ -1,35 +1,12 @@
 const mongoose = require("mongoose");
 
-const addonSchema = new mongoose.Schema(
-  {
-    name: { type: String, required: true },
-    price: { type: Number, required: true },
-  },
-  { _id: false }
-);
-
-const dishSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  desc: { type: String, trim: true },
-  price: { type: Number, required: true },
-  largePriceExtra: { type: Number, default: 0 },
-  kcal: Number,
-  protein: Number,
-  carbs: Number,
-  fat: Number,
-  tags: [{ type: String }],
-  allergens: { type: String, trim: true },
-  images: { type: [String], default: [] },
-  addons: [addonSchema],
-});
-
 const daySchema = new mongoose.Schema(
   {
     day: { type: String, required: true },
     date: { type: String, required: true },
     theme: { type: String, trim: true },
     closed: { type: Boolean, default: false },
-    dishes: [dishSchema],
+    dishes: [{ type: mongoose.Schema.Types.ObjectId, ref: "Dish" }],
   },
   { _id: false }
 );

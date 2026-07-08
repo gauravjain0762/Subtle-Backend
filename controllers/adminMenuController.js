@@ -1,8 +1,24 @@
+const mongoose = require("mongoose");
 const Menu = require("../models/Menu");
+const Dish = require("../models/Dish");
 const AppError = require("../utils/appError");
 const catchAsync = require("../utils/catchAsync");
 
 const WEEKDAYS = ["MON", "TUE", "WED", "THU", "FRI"];
+
+const validateDishIds = async (dishIds) => {
+  const invalidIds = dishIds.filter((id) => !mongoose.Types.ObjectId.isValid(id));
+  if (invalidIds.length > 0) {
+    throw new AppError(`Invalid dish id(s): ${invalidIds.join(", ")}`, 400);
+  }
+
+  if (dishIds.length === 0) return;
+
+  const foundCount = await Dish.countDocuments({ _id: { $in: dishIds } });
+  if (foundCount !== new Set(dishIds.map(String)).size) {
+    throw new AppError("One or more dishIds do not exist", 400);
+  }
+};
 
 exports.publishMenu = catchAsync(async (req, res) => {
   const { weekStart, weekEnd, days } = req.body || {};
@@ -17,6 +33,9 @@ exports.publishMenu = catchAsync(async (req, res) => {
     throw new AppError(`All weekdays (Mon–Fri) must be included in the menu. Missing: ${missing.join(", ")}`, 400);
   }
 
+  const allDishIds = [...new Set(days.flatMap((d) => (Array.isArray(d.dishes) ? d.dishes : [])))];
+  await validateDishIds(allDishIds);
+
   const menu = await Menu.findOneAndUpdate(
     { weekStart },
     { weekStart, weekEnd, days, published: true },
@@ -26,5 +45,34 @@ exports.publishMenu = catchAsync(async (req, res) => {
   res.status(200).json({
     success: true,
     menu: { _id: menu._id, weekStart: menu.weekStart, published: menu.published },
+  });
+});
+
+exports.assignDishesToDay = catchAsync(async (req, res) => {
+  const { weekStart, day } = req.params;
+  const { dishIds } = req.body || {};
+
+  if (!Array.isArray(dishIds)) {
+    throw new AppError("dishIds must be an array", 400);
+  }
+
+  await validateDishIds(dishIds);
+
+  const menu = await Menu.findOne({ weekStart });
+  if (!menu) {
+    throw new AppError("Menu week not found", 404);
+  }
+
+  const targetDay = menu.days.find((d) => d.day.toUpperCase() === day.toUpperCase());
+  if (!targetDay) {
+    throw new AppError(`Day ${day} not found in this week's menu`, 404);
+  }
+
+  targetDay.dishes = dishIds;
+  await menu.save();
+
+  res.status(200).json({
+    success: true,
+    day: { day: targetDay.day, date: targetDay.date, dishes: targetDay.dishes },
   });
 });
