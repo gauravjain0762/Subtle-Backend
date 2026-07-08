@@ -5,9 +5,16 @@ const uploadImageBuffer = require("../utils/uploadImageBuffer");
 const { parseJsonField } = require("../utils/parseFormField");
 
 const STRING_FIELDS = ["name", "price", "description", "category", "menuId"];
-const NUMBER_FIELDS = ["kcal", "protein", "carbs", "fat"];
 const BOOLEAN_FIELDS = ["available", "popular", "vegan"];
-const ARRAY_FIELDS = ["allergens", "tags", "ingredients", "portions", "availableDays", "images"];
+const ARRAY_FIELDS = [
+  "allergens",
+  "tags",
+  "ingredients",
+  "portions",
+  "availableDays",
+  "images",
+  "nutritionalIngredients",
+];
 
 const buildDishData = async (req) => {
   const body = req.body || {};
@@ -15,16 +22,6 @@ const buildDishData = async (req) => {
 
   STRING_FIELDS.forEach((field) => {
     if (body[field] !== undefined) data[field] = body[field];
-  });
-
-  NUMBER_FIELDS.forEach((field) => {
-    if (body[field] !== undefined && body[field] !== "") {
-      const num = Number(body[field]);
-      if (Number.isNaN(num)) {
-        throw new AppError(`${field} must be a number`, 400);
-      }
-      data[field] = num;
-    }
   });
 
   BOOLEAN_FIELDS.forEach((field) => {
