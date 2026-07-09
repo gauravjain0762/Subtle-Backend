@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Order = require("../models/Order");
 const User = require("../models/User");
 const AppError = require("../utils/appError");
@@ -148,7 +149,12 @@ exports.bulkUpdateStatus = catchAsync(async (req, res) => {
     throw new AppError("Invalid status", 400);
   }
 
-  const result = await Order.updateMany({ orderNumber: { $in: orderIds } }, { status });
+  const invalidIds = orderIds.filter((id) => !mongoose.Types.ObjectId.isValid(id));
+  if (invalidIds.length > 0) {
+    throw new AppError(`Invalid order id(s): ${invalidIds.join(", ")}`, 400);
+  }
+
+  const result = await Order.updateMany({ _id: { $in: orderIds } }, { status });
 
   res.status(200).json({ success: true, updatedCount: result.modifiedCount });
 });
