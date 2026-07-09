@@ -25,7 +25,7 @@ const validatePromoCode = async (code, workspaceCode) => {
   return {
     valid: true,
     code: promo.code,
-    discount: { type: promo.type, value: promo.value, label: promo.label },
+    discount: { type: promo.type, value: promo.value, label: promo.label, description: promo.description },
   };
 };
 

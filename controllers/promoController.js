@@ -32,6 +32,7 @@ exports.listActivePromoCodes = catchAsync(async (req, res) => {
       type: p.type,
       value: p.value,
       label: p.label,
+      description: p.description,
       expiresAt: p.expiresAt,
     })),
   });

@@ -6,6 +6,7 @@ const promoCodeSchema = new mongoose.Schema(
     type: { type: String, enum: ["percentage", "fixed"], required: true },
     value: { type: Number, required: true },
     label: { type: String, trim: true },
+    description: { type: String, trim: true },
     active: { type: Boolean, default: true },
     expiresAt: { type: Date },
     workspaceCodes: { type: [String], default: [] },

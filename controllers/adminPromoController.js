@@ -2,13 +2,13 @@ const PromoCode = require("../models/PromoCode");
 const AppError = require("../utils/appError");
 const catchAsync = require("../utils/catchAsync");
 
-const ALLOWED_FIELDS = ["type", "value", "label", "active", "expiresAt", "workspaceCodes"];
+const ALLOWED_FIELDS = ["type", "value", "label", "description", "active", "expiresAt", "workspaceCodes"];
 
 const normalizeWorkspaceCodes = (codes) =>
   Array.isArray(codes) ? codes.map((c) => String(c).trim().toUpperCase()) : [];
 
 exports.createPromoCode = catchAsync(async (req, res) => {
-  const { code, type, value, label, active, expiresAt, workspaceCodes } = req.body || {};
+  const { code, type, value, label, description, active, expiresAt, workspaceCodes } = req.body || {};
 
   if (!code || !["percentage", "fixed"].includes(type) || value === undefined) {
     throw new AppError("code, type (percentage|fixed) and value are required", 400);
@@ -26,6 +26,7 @@ exports.createPromoCode = catchAsync(async (req, res) => {
     type,
     value,
     label,
+    description,
     active: active !== undefined ? Boolean(active) : true,
     expiresAt: expiresAt ? new Date(expiresAt) : undefined,
     workspaceCodes: normalizeWorkspaceCodes(workspaceCodes),
