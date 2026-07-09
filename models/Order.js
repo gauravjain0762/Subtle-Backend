@@ -26,9 +26,11 @@ const discountSchema = new mongoose.Schema(
 const orderSchema = new mongoose.Schema(
   {
     orderRef: { type: String, required: true, unique: true },
+    orderNumber: { type: String, unique: true, sparse: true },
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     workspace: { type: mongoose.Schema.Types.ObjectId, ref: "Workspace", required: true },
     workspaceCode: { type: String, required: true, uppercase: true, trim: true },
+    workspaceName: { type: String, trim: true },
     deliveryDate: { type: String, required: true },
     lunchTime: { type: String, required: true },
     items: [orderItemSchema],
@@ -37,10 +39,11 @@ const orderSchema = new mongoose.Schema(
     discount: discountSchema,
     total: { type: Number, required: true },
     isWeeklySubscription: { type: Boolean, default: false },
+    paymentMethod: { type: String, enum: ["card", "apple_pay", "google_pay"], default: "card" },
     status: {
       type: String,
-      enum: ["confirmed", "preparing", "out_for_delivery", "delivered", "cancelled"],
-      default: "confirmed",
+      enum: ["new", "delivered", "cancelled"],
+      default: "new",
     },
   },
   { timestamps: true }

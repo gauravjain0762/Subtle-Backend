@@ -4,6 +4,7 @@ const Cart = require("../models/Cart");
 const AppError = require("../utils/appError");
 const catchAsync = require("../utils/catchAsync");
 const { generateDailyRef } = require("../utils/generateRef");
+const getNextSequence = require("../utils/getNextSequence");
 const validatePromoCode = require("../utils/validatePromoCode");
 const { getWeekdayCode, getStandardDishesForDay } = require("../utils/standardMenu");
 
@@ -16,7 +17,15 @@ const isPastCutoff = (deliveryDate) => {
 };
 
 exports.createOrder = catchAsync(async (req, res) => {
-  const { workspaceCode, deliveryDate, lunchTime, items, isWeeklySubscription, promoCode } = req.body || {};
+  const {
+    workspaceCode,
+    deliveryDate,
+    lunchTime,
+    items,
+    isWeeklySubscription,
+    promoCode,
+    paymentMethod,
+  } = req.body || {};
 
   if (!workspaceCode || !deliveryDate || !lunchTime || !Array.isArray(items) || items.length === 0) {
     throw new AppError("Missing required order fields", 400);
@@ -121,14 +130,21 @@ exports.createOrder = catchAsync(async (req, res) => {
     total = Math.round((subtotal - amount) * 100) / 100;
   }
 
+  if (paymentMethod && !["card", "apple_pay", "google_pay"].includes(paymentMethod)) {
+    throw new AppError("Invalid payment method", 400);
+  }
+
   const dateStr = deliveryDate.replace(/-/g, "");
   const orderRef = await generateDailyRef(Order, "orderRef", "SK", dateStr);
+  const orderNumber = `ORD-${await getNextSequence("orderNumber")}`;
 
   const order = await Order.create({
     orderRef,
+    orderNumber,
     user: req.user._id,
     workspace: workspace._id,
     workspaceCode: workspace.code,
+    workspaceName: workspace.name,
     deliveryDate,
     lunchTime,
     items: orderItems,
@@ -137,6 +153,7 @@ exports.createOrder = catchAsync(async (req, res) => {
     discount,
     total,
     isWeeklySubscription: Boolean(isWeeklySubscription),
+    paymentMethod: paymentMethod || "card",
   });
 
   await Cart.deleteOne({ user: req.user._id });

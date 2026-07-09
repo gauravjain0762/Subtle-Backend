@@ -9,7 +9,12 @@ const {
   rejectWorkspaceRequest,
 } = require("../controllers/adminWorkspaceRequestController");
 const { listWorkspaces, updateWorkspaceStatus } = require("../controllers/adminWorkspaceController");
-const { listOrders, updateOrderStatus } = require("../controllers/adminOrderController");
+const {
+  listOrders,
+  getOrder,
+  updateOrderStatus,
+  bulkUpdateStatus,
+} = require("../controllers/adminOrderController");
 const { publishMenu, assignDishesToDay, deleteMenu } = require("../controllers/adminMenuController");
 const {
   createDish,
@@ -40,6 +45,8 @@ router.get("/workspaces", listWorkspaces);
 router.patch("/workspaces/:id", updateWorkspaceStatus);
 
 router.get("/orders", listOrders);
+router.get("/orders/:id", getOrder);
+router.patch("/orders/bulk-status", bulkUpdateStatus);
 router.patch("/orders/:id/status", updateOrderStatus);
 
 router.post("/dishes", upload.array("images", 5), createDish);
