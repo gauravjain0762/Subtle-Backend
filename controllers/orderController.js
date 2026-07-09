@@ -81,7 +81,9 @@ exports.createOrder = catchAsync(async (req, res) => {
       throw new AppError(`Dish ${dish.name} has an invalid price`, 400);
     }
 
-    const addonNames = Array.isArray(item.addons) ? item.addons : [];
+    const rawAddons = Array.isArray(item.addons) ? item.addons : [];
+    const addonNames = rawAddons.map((addon) => (typeof addon === "string" ? addon : addon?.name));
+
     addonNames.forEach((addonName) => {
       const ingredient = (dish.ingredients || []).find((i) => i.name === addonName);
       if (!ingredient || ingredient.price === undefined || ingredient.price === null || ingredient.price === "") {
