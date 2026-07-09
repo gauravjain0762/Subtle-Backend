@@ -1,18 +1,26 @@
 const User = require("../models/User");
-const Otp = require("../models/Otp");
 const Workspace = require("../models/Workspace");
 const AppError = require("../utils/appError");
 const catchAsync = require("../utils/catchAsync");
 const { isValidEmail } = require("../utils/validators");
-const { generateOtp, hashOtp, compareOtp, OTP_TTL_SECONDS } = require("../utils/otp");
 const generateToken = require("../utils/generateToken");
-const { sendOtpEmail } = require("../services/emailService");
 
 exports.register = catchAsync(async (req, res) => {
-  const { firstName, lastName, email, workspaceCode } = req.body || {};
+  const { firstName, lastName, email, workspaceCode, password, confirmPassword } = req.body || {};
 
-  if (!firstName || !lastName || !isValidEmail(email) || !workspaceCode) {
-    throw new AppError("firstName, lastName, email and workspaceCode are required", 400);
+  if (!firstName || !lastName || !isValidEmail(email) || !workspaceCode || !password || !confirmPassword) {
+    throw new AppError(
+      "firstName, lastName, email, workspaceCode, password and confirmPassword are required",
+      400
+    );
+  }
+
+  if (password !== confirmPassword) {
+    throw new AppError("Passwords do not match", 400);
+  }
+
+  if (password.length < 6) {
+    throw new AppError("Password must be at least 6 characters", 400);
   }
 
   const normalizedEmail = email.trim().toLowerCase();
@@ -30,79 +38,37 @@ exports.register = catchAsync(async (req, res) => {
     throw new AppError("Email already registered", 400);
   }
 
-  await User.create({
+  const user = await User.create({
     firstName: firstName.trim(),
     lastName: lastName.trim(),
     email: normalizedEmail,
+    password,
     workspaceCode: workspace.code,
     workspaceName: workspace.name,
   });
 
-  const otp = generateOtp();
-  const otpHash = await hashOtp(otp);
-  const expiresAt = new Date(Date.now() + OTP_TTL_SECONDS * 1000);
+  const token = generateToken(user._id);
 
-  await Otp.deleteMany({ email: normalizedEmail });
-  await Otp.create({ email: normalizedEmail, otpHash, expiresAt });
-
-  await sendOtpEmail(normalizedEmail, otp);
-
-  res.status(200).json({
+  res.status(201).json({
     success: true,
-    message: "OTP sent",
+    token,
+    user,
   });
 });
 
-exports.sendOtp = catchAsync(async (req, res) => {
-  const { email } = req.body;
+exports.login = catchAsync(async (req, res) => {
+  const { email, password } = req.body || {};
 
-  if (!isValidEmail(email)) {
-    throw new AppError("Invalid email address", 400);
-  }
-
-  const normalizedEmail = email.trim().toLowerCase();
-  const otp = generateOtp();
-  const otpHash = await hashOtp(otp);
-  const expiresAt = new Date(Date.now() + OTP_TTL_SECONDS * 1000);
-
-  await Otp.deleteMany({ email: normalizedEmail });
-  await Otp.create({ email: normalizedEmail, otpHash, expiresAt });
-
-  await sendOtpEmail(normalizedEmail, otp);
-
-  res.status(200).json({
-    success: true,
-    message: `OTP sent to ${normalizedEmail}`,
-    expiresIn: OTP_TTL_SECONDS,
-  });
-});
-
-exports.verifyOtp = catchAsync(async (req, res) => {
-  const { email, otp } = req.body;
-
-  if (!isValidEmail(email) || !otp) {
-    throw new AppError("Invalid or expired OTP", 401);
+  if (!isValidEmail(email) || !password) {
+    throw new AppError("Invalid email or password", 401);
   }
 
   const normalizedEmail = email.trim().toLowerCase();
 
-  const user = await User.findOne({ email: normalizedEmail });
-  if (!user) {
-    throw new AppError("No account found. Please sign up first.", 401);
+  const user = await User.findOne({ email: normalizedEmail }).select("+password");
+  if (!user || !(await user.comparePassword(password))) {
+    throw new AppError("Invalid email or password", 401);
   }
-
-  const otpDoc = await Otp.findOne({ email: normalizedEmail }).sort({ createdAt: -1 });
-
-  if (!otpDoc || otpDoc.expiresAt < new Date()) {
-    throw new AppError("Invalid or expired OTP", 401);
-  }
-
-  const isMatch = await compareOtp(String(otp), otpDoc.otpHash);
-  if (!isMatch) {
-    throw new AppError("Invalid or expired OTP", 401);
-  }
-
-  await Otp.deleteMany({ email: normalizedEmail });
 
   const token = generateToken(user._id);
 
