@@ -4,9 +4,10 @@ const cartItemSchema = new mongoose.Schema(
   {
     dishId: { type: mongoose.Schema.Types.ObjectId, required: true },
     dishName: { type: String, required: true },
+    date: { type: String },
     portionSize: { type: String },
     qty: { type: Number, required: true, min: 1 },
-    addons: { type: [String], default: [] },
+    addons: { type: [mongoose.Schema.Types.Mixed], default: [] },
   },
   { _id: false }
 );
