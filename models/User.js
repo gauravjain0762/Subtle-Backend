@@ -10,6 +10,10 @@ const userSchema = new mongoose.Schema(
     phone: { type: String, trim: true },
     workspaceCode: { type: String, trim: true, uppercase: true },
     workspaceName: { type: String, trim: true },
+    workspaceAddress: { type: String, trim: true },
+    workspaceCity: { type: String, trim: true },
+    workspaceCounty: { type: String, trim: true },
+    workspacePostcode: { type: String, trim: true },
   },
   {
     timestamps: true,

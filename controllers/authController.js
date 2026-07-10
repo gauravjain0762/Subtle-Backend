@@ -45,6 +45,10 @@ exports.register = catchAsync(async (req, res) => {
     password,
     workspaceCode: workspace.code,
     workspaceName: workspace.name,
+    workspaceAddress: workspace.address1,
+    workspaceCity: workspace.city,
+    workspaceCounty: workspace.county,
+    workspacePostcode: workspace.postcode,
   });
 
   const token = generateToken(user._id);

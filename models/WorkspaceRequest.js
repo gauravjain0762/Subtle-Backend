@@ -8,6 +8,7 @@ const workspaceRequestSchema = new mongoose.Schema(
       address1: { type: String, required: true, trim: true },
       town: { type: String, trim: true },
       city: { type: String, required: true, trim: true },
+      county: { type: String, trim: true },
       postcode: { type: String, required: true, trim: true, uppercase: true },
       country: { type: String, required: true, trim: true },
       deliveryTimes: [{ type: String }],

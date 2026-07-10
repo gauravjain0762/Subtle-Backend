@@ -7,6 +7,7 @@ const workspaceSchema = new mongoose.Schema(
     address1: { type: String, trim: true },
     town: { type: String, trim: true },
     city: { type: String, trim: true },
+    county: { type: String, trim: true },
     postcode: { type: String, trim: true, uppercase: true },
     country: { type: String, trim: true },
     deliveryTimes: [{ type: String }],

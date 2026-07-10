@@ -57,6 +57,7 @@ exports.approveWorkspaceRequest = catchAsync(async (req, res) => {
     address1: request.workspace.address1,
     town: request.workspace.town,
     city: request.workspace.city,
+    county: request.workspace.county,
     postcode: request.workspace.postcode,
     country: request.workspace.country,
     deliveryTimes: request.workspace.deliveryTimes,
