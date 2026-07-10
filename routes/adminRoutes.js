@@ -7,8 +7,13 @@ const {
   listWorkspaceRequests,
   approveWorkspaceRequest,
   rejectWorkspaceRequest,
+  deleteWorkspaceRequest,
 } = require("../controllers/adminWorkspaceRequestController");
-const { listWorkspaces, updateWorkspaceStatus } = require("../controllers/adminWorkspaceController");
+const {
+  listWorkspaces,
+  updateWorkspaceStatus,
+  deleteWorkspace,
+} = require("../controllers/adminWorkspaceController");
 const {
   listOrders,
   getOrder,
@@ -40,9 +45,11 @@ router.use(adminProtect);
 router.get("/workspace-requests", listWorkspaceRequests);
 router.post("/workspace-requests/:id/approve", approveWorkspaceRequest);
 router.post("/workspace-requests/:id/reject", rejectWorkspaceRequest);
+router.delete("/workspace-requests/:id", deleteWorkspaceRequest);
 
 router.get("/workspaces", listWorkspaces);
 router.patch("/workspaces/:id", updateWorkspaceStatus);
+router.delete("/workspaces/:id", deleteWorkspace);
 
 router.get("/orders", listOrders);
 router.get("/orders/:id", getOrder);

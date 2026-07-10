@@ -99,3 +99,13 @@ exports.rejectWorkspaceRequest = catchAsync(async (req, res) => {
     message: `Request rejected. Notification sent to ${request.contact.email}.`,
   });
 });
+
+exports.deleteWorkspaceRequest = catchAsync(async (req, res) => {
+  const request = await WorkspaceRequest.findByIdAndDelete(req.params.id);
+
+  if (!request) {
+    throw new AppError("Workspace request not found", 404);
+  }
+
+  res.status(200).json({ success: true, message: "Workspace request deleted" });
+});

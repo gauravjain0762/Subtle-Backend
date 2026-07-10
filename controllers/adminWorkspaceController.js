@@ -65,3 +65,13 @@ exports.updateWorkspaceStatus = catchAsync(async (req, res) => {
     workspace: { _id: workspace._id, status: workspace.status },
   });
 });
+
+exports.deleteWorkspace = catchAsync(async (req, res) => {
+  const workspace = await Workspace.findByIdAndDelete(req.params.id);
+
+  if (!workspace) {
+    throw new AppError("Workspace not found", 404);
+  }
+
+  res.status(200).json({ success: true, message: "Workspace deleted" });
+});
