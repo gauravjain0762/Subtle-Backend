@@ -74,6 +74,10 @@ exports.login = catchAsync(async (req, res) => {
     throw new AppError("Invalid email or password", 401);
   }
 
+  if (user.status === "blocked") {
+    throw new AppError("Your account has been blocked. Please contact support.", 403);
+  }
+
   const token = generateToken(user._id);
 
   res.status(200).json({

@@ -14,6 +14,7 @@ const userSchema = new mongoose.Schema(
     workspaceCity: { type: String, trim: true },
     workspaceCounty: { type: String, trim: true },
     workspacePostcode: { type: String, trim: true },
+    status: { type: String, enum: ["active", "blocked"], default: "active" },
   },
   {
     timestamps: true,

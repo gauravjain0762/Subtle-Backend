@@ -24,6 +24,10 @@ const protect = catchAsync(async (req, res, next) => {
     throw new AppError("Unauthorized", 401);
   }
 
+  if (user.status === "blocked") {
+    throw new AppError("Your account has been blocked. Please contact support.", 403);
+  }
+
   req.user = user;
   next();
 });

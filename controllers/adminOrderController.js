@@ -71,7 +71,7 @@ const toAdminOrderJSON = (order) => {
 };
 
 exports.listOrders = catchAsync(async (req, res) => {
-  const { status, type, workspaceId, dayFilter, startDate, endDate, search } = req.query;
+  const { status, type, workspaceId, customerId, dayFilter, startDate, endDate, search } = req.query;
   const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
   const limit = Math.max(parseInt(req.query.limit, 10) || 10, 1);
 
@@ -80,6 +80,7 @@ exports.listOrders = catchAsync(async (req, res) => {
   if (status) filter.status = status;
   if (type) filter.isWeeklySubscription = type === "weekly";
   if (workspaceId) filter.workspace = workspaceId;
+  if (customerId) filter.user = customerId;
 
   const deliveryDateFilter = buildDeliveryDateFilter(dayFilter, startDate, endDate);
   if (deliveryDateFilter) filter.deliveryDate = deliveryDateFilter;

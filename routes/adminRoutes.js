@@ -35,6 +35,11 @@ const {
   updatePromoCode,
   deletePromoCode,
 } = require("../controllers/adminPromoController");
+const {
+  listCustomers,
+  getCustomer,
+  updateCustomerStatus,
+} = require("../controllers/adminCustomerController");
 
 const router = express.Router();
 
@@ -71,5 +76,9 @@ router.post("/promo-codes", createPromoCode);
 router.get("/promo-codes", listPromoCodes);
 router.patch("/promo-codes/:id", updatePromoCode);
 router.delete("/promo-codes/:id", deletePromoCode);
+
+router.get("/customers", listCustomers);
+router.get("/customers/:id", getCustomer);
+router.patch("/customers/:id/status", updateCustomerStatus);
 
 module.exports = router;
