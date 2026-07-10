@@ -6,6 +6,7 @@ const catchAsync = require("../utils/catchAsync");
 const { isValidEmail } = require("../utils/validators");
 const { isPostcodeInDeliveryArea } = require("../config/deliveryAreas");
 const { generateDailyRef } = require("../utils/generateRef");
+const { sendNewWorkspaceRequestAdminEmail } = require("../services/emailService");
 
 const todayCompact = () => {
   const now = new Date();
@@ -61,6 +62,13 @@ exports.createWorkspaceRequest = catchAsync(async (req, res) => {
       ...contact,
       email: contact.email.trim().toLowerCase(),
     },
+  });
+
+  await sendNewWorkspaceRequestAdminEmail({
+    referenceId,
+    workspaceName: workspace.name,
+    contactName: `${contact.firstName} ${contact.lastName}`,
+    contactEmail: contact.email.trim().toLowerCase(),
   });
 
   res.status(201).json({
