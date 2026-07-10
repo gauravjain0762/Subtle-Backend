@@ -35,8 +35,8 @@ exports.approveWorkspaceRequest = catchAsync(async (req, res) => {
   if (!request) {
     throw new AppError("Workspace request not found", 404);
   }
-  if (request.status !== "pending") {
-    throw new AppError("Request has already been reviewed", 400);
+  if (request.status === "approved") {
+    throw new AppError("Request has already been approved", 400);
   }
 
   let code = (req.body && (req.body.code || req.body.codeOverride)) || null;
