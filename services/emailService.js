@@ -26,6 +26,14 @@ const sendWorkspaceRejectedEmail = async (email, reason) => {
   });
 };
 
+const sendPasswordResetEmail = async (email, code) => {
+  await sendMail({
+    to: email,
+    subject: "Your Subtle Kitchen password reset code",
+    text: `Your password reset code is: ${code}\n\nThis code expires in 10 minutes. If you didn't request this, you can ignore this email.`,
+  });
+};
+
 const sendNewWorkspaceRequestAdminEmail = async ({ referenceId, workspaceName, contactName, contactEmail }) => {
   const adminEmail = process.env.ADMIN_NOTIFY_EMAIL;
   if (!adminEmail) return;
@@ -40,5 +48,6 @@ const sendNewWorkspaceRequestAdminEmail = async ({ referenceId, workspaceName, c
 module.exports = {
   sendWorkspaceApprovedEmail,
   sendWorkspaceRejectedEmail,
+  sendPasswordResetEmail,
   sendNewWorkspaceRequestAdminEmail,
 };

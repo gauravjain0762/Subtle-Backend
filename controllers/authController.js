@@ -1,9 +1,12 @@
 const User = require("../models/User");
 const Workspace = require("../models/Workspace");
+const PasswordResetCode = require("../models/PasswordResetCode");
 const AppError = require("../utils/appError");
 const catchAsync = require("../utils/catchAsync");
 const { isValidEmail } = require("../utils/validators");
 const generateToken = require("../utils/generateToken");
+const { generateResetCode, hashResetCode, compareResetCode, RESET_CODE_TTL_SECONDS } = require("../utils/resetCode");
+const { sendPasswordResetEmail } = require("../services/emailService");
 
 exports.register = catchAsync(async (req, res) => {
   const { firstName, lastName, email, workspaceCode, password, confirmPassword } = req.body || {};
@@ -93,4 +96,62 @@ exports.getMe = catchAsync(async (req, res) => {
     success: true,
     user: req.user,
   });
+});
+
+exports.forgotPassword = catchAsync(async (req, res) => {
+  const { email } = req.body || {};
+
+  if (isValidEmail(email)) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: normalizedEmail });
+
+    if (user) {
+      const code = generateResetCode();
+      const codeHash = await hashResetCode(code);
+      const expiresAt = new Date(Date.now() + RESET_CODE_TTL_SECONDS * 1000);
+
+      await PasswordResetCode.deleteMany({ email: normalizedEmail });
+      await PasswordResetCode.create({ email: normalizedEmail, codeHash, expiresAt });
+
+      await sendPasswordResetEmail(normalizedEmail, code);
+    }
+  }
+
+  res.status(200).json({ success: true });
+});
+
+exports.resetPassword = catchAsync(async (req, res) => {
+  const { email, otp, newPassword } = req.body || {};
+
+  if (!isValidEmail(email) || !otp || !newPassword) {
+    throw new AppError("Invalid or expired code", 400);
+  }
+
+  if (newPassword.length < 6) {
+    throw new AppError("Password must be at least 6 characters", 400);
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const resetCode = await PasswordResetCode.findOne({ email: normalizedEmail }).sort({ createdAt: -1 });
+  if (!resetCode || resetCode.expiresAt < new Date()) {
+    throw new AppError("Invalid or expired code", 400);
+  }
+
+  const isMatch = await compareResetCode(String(otp), resetCode.codeHash);
+  if (!isMatch) {
+    throw new AppError("Invalid or expired code", 400);
+  }
+
+  const user = await User.findOne({ email: normalizedEmail });
+  if (!user) {
+    throw new AppError("Invalid or expired code", 400);
+  }
+
+  user.password = newPassword;
+  await user.save();
+
+  await PasswordResetCode.deleteMany({ email: normalizedEmail });
+
+  res.status(200).json({ success: true });
 });
