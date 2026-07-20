@@ -40,6 +40,8 @@ const orderSchema = new mongoose.Schema(
     total: { type: Number, required: true },
     isWeeklySubscription: { type: Boolean, default: false },
     paymentMethod: { type: String, enum: ["card", "apple_pay", "google_pay"], default: "card" },
+    paymentIntentId: { type: String },
+    paid: { type: Boolean, default: false },
     status: {
       type: String,
       enum: ["new", "delivered", "cancelled"],

@@ -14,7 +14,9 @@ const userSchema = new mongoose.Schema(
     workspaceCity: { type: String, trim: true },
     workspaceCounty: { type: String, trim: true },
     workspacePostcode: { type: String, trim: true },
+    workspaceDeliveryTimes: { type: [String], default: undefined },
     status: { type: String, enum: ["active", "blocked"], default: "active" },
+    stripeCustomerId: { type: String },
   },
   {
     timestamps: true,

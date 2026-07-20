@@ -18,6 +18,8 @@ const subscriptionRoutes = require("./routes/subscriptionRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const cartRoutes = require("./routes/cartRoutes");
 const promoRoutes = require("./routes/promoRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
+const webhookRoutes = require("./routes/webhookRoutes");
 
 connectDB();
 
@@ -26,6 +28,10 @@ const app = express();
 app.use(helmet());
 app.use(cors());
 app.use(morgan("dev"));
+
+// Mounted before express.json() - Stripe webhook signature verification needs the raw, unparsed body.
+app.use("/api/webhooks", webhookRoutes);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
@@ -43,6 +49,7 @@ app.use("/api/subscriptions", subscriptionRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/promo", promoRoutes);
+app.use("/api/payments", paymentRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ success: false, error: "Route not found" });

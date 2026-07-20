@@ -49,6 +49,7 @@ exports.register = catchAsync(async (req, res) => {
     workspaceCity: workspace.city,
     workspaceCounty: workspace.county,
     workspacePostcode: workspace.postcode,
+    workspaceDeliveryTimes: workspace.deliveryTimes,
   });
 
   const token = generateToken(user._id);

@@ -17,6 +17,7 @@ const subscriptionSchema = new mongoose.Schema(
     nextBilling: { type: String },
     startedOn: { type: String },
     pausedAt: { type: Date },
+    stripeSubscriptionId: { type: String },
   },
   { timestamps: true }
 );
