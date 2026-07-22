@@ -18,6 +18,7 @@ exports.createOrder = catchAsync(async (req, res) => {
     promoCode,
     paymentMethod,
     paymentIntentId,
+    useStripeCheckout,
   } = req.body || {};
 
   if (!workspaceCode || !deliveryDate || !lunchTime || !Array.isArray(items) || items.length === 0) {
@@ -82,10 +83,58 @@ exports.createOrder = catchAsync(async (req, res) => {
 
   await Cart.deleteOne({ user: req.user._id });
 
+  if (useStripeCheckout) {
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      customer_email: req.user.email,
+      line_items: [
+        {
+          price_data: {
+            currency: "gbp",
+            product_data: { name: `Subtle Kitchen order ${orderNumber}` },
+            unit_amount: Math.round(total * 100),
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: `${process.env.FRONTEND_URL}/confirmation?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL}/review`,
+      metadata: { orderId: order._id.toString(), userId: req.user._id.toString() },
+    });
+
+    order.checkoutSessionId = session.id;
+    await order.save();
+
+    return res.status(201).json({
+      success: true,
+      order,
+      checkoutUrl: session.url,
+    });
+  }
+
   res.status(201).json({
     success: true,
     order,
   });
+});
+
+exports.getOrderBySession = catchAsync(async (req, res) => {
+  const { sessionId } = req.params;
+
+  const order = await Order.findOne({ checkoutSessionId: sessionId, user: req.user._id });
+  if (!order) {
+    throw new AppError("Order not found", 404);
+  }
+
+  if (!order.paid) {
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    if (session.payment_status === "paid") {
+      order.paid = true;
+      await order.save();
+    }
+  }
+
+  res.status(200).json({ success: true, order });
 });
 
 exports.getMyOrders = catchAsync(async (req, res) => {

@@ -41,6 +41,7 @@ const orderSchema = new mongoose.Schema(
     isWeeklySubscription: { type: Boolean, default: false },
     paymentMethod: { type: String, enum: ["card", "apple_pay", "google_pay"], default: "card" },
     paymentIntentId: { type: String },
+    checkoutSessionId: { type: String },
     paid: { type: Boolean, default: false },
     status: {
       type: String,

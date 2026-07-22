@@ -21,6 +21,14 @@ exports.handleStripeWebhook = async (req, res) => {
         break;
       }
 
+      case "checkout.session.completed": {
+        const session = event.data.object;
+        if (session.payment_status === "paid") {
+          await Order.updateMany({ checkoutSessionId: session.id }, { paid: true });
+        }
+        break;
+      }
+
       case "customer.subscription.updated":
       case "customer.subscription.deleted": {
         const stripeSub = event.data.object;
