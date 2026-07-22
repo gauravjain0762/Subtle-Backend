@@ -20,6 +20,7 @@ const workspaceRequestSchema = new mongoose.Schema(
       lastName: { type: String, required: true, trim: true },
       email: { type: String, required: true, lowercase: true, trim: true },
       phone: { type: String, trim: true },
+      notes: { type: String, trim: true },
     },
     status: {
       type: String,
