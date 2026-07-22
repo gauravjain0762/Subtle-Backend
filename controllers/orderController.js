@@ -85,7 +85,9 @@ exports.createOrder = catchAsync(async (req, res) => {
 
   if (useStripeCheckout) {
     const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
       mode: "payment",
+      currency: "gbp",
       customer_email: req.user.email,
       line_items: [
         {
