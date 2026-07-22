@@ -102,6 +102,7 @@ exports.createOrder = catchAsync(async (req, res) => {
       success_url: `${process.env.FRONTEND_URL}/confirmation?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.FRONTEND_URL}/review`,
       metadata: { orderId: order._id.toString(), userId: req.user._id.toString() },
+      locale: "en",
     });
 
     order.checkoutSessionId = session.id;
