@@ -25,6 +25,22 @@ exports.createOrder = catchAsync(async (req, res) => {
     throw new AppError("Missing required order fields", 400);
   }
 
+  const MIN_QUANTITY = 75;
+  for (const item of items) {
+    if (!item.qty || item.qty < MIN_QUANTITY) {
+      throw new AppError(`Each dish must have minimum ${MIN_QUANTITY} servings. ${item.dishName || "Item"} has ${item.qty || 0}.`, 400);
+    }
+
+    if (Array.isArray(item.addons) && item.addons.length > 0) {
+      for (const addon of item.addons) {
+        const addonQty = addon.qty || 1;
+        if (addonQty < MIN_QUANTITY) {
+          throw new AppError(`Each add-on must have minimum ${MIN_QUANTITY} servings. ${addon.name} has ${addonQty}.`, 400);
+        }
+      }
+    }
+  }
+
   const workspace = await Workspace.findOne({ code: workspaceCode.trim().toUpperCase(), status: "active" });
   if (!workspace) {
     throw new AppError("Workspace code is not active", 400);
