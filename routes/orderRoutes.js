@@ -6,6 +6,6 @@ const router = express.Router();
 
 router.post("/", protect, createOrder);
 router.get("/my", protect, getMyOrders);
-router.get("/by-session/:sessionId", protect, getOrderBySession);
+router.get("/by-session/:sessionId", getOrderBySession);
 
 module.exports = router;

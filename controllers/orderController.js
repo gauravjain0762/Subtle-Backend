@@ -124,7 +124,7 @@ exports.createOrder = catchAsync(async (req, res) => {
 exports.getOrderBySession = catchAsync(async (req, res) => {
   const { sessionId } = req.params;
 
-  const order = await Order.findOne({ checkoutSessionId: sessionId, user: req.user._id });
+  const order = await Order.findOne({ checkoutSessionId: sessionId });
   if (!order) {
     throw new AppError("Order not found", 404);
   }
