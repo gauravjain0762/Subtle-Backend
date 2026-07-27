@@ -100,6 +100,10 @@ exports.createOrder = catchAsync(async (req, res) => {
   await Cart.deleteOne({ user: req.user._id });
 
   if (useStripeCheckout) {
+    const redirectUrl = process.env.NODE_ENV === "production"
+      ? process.env.FRONTEND_URL
+      : "http://localhost:3000";
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "payment",
@@ -115,8 +119,8 @@ exports.createOrder = catchAsync(async (req, res) => {
           quantity: 1,
         },
       ],
-      success_url: `${process.env.FRONTEND_URL}/confirmation?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL}/review`,
+      success_url: `${redirectUrl}/confirmation?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${redirectUrl}/review`,
       metadata: { orderId: order._id.toString(), userId: req.user._id.toString() },
       locale: "en",
     });
@@ -153,7 +157,13 @@ exports.getOrderBySession = catchAsync(async (req, res) => {
     }
   }
 
-  res.status(200).json({ success: true, order });
+  const orderData = order.toObject();
+  orderData.items = (orderData.items || []).map(item => ({
+    ...item,
+    price: item.unitPrice,
+  }));
+
+  res.status(200).json({ success: true, order: orderData });
 });
 
 exports.getMyOrders = catchAsync(async (req, res) => {
