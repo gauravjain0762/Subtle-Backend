@@ -63,11 +63,12 @@ exports.getAssignedCompanies = catchAsync(async (req, res) => {
 
   const assignments = await DishCompanyAssignment.find({ dishId }).populate("companyId", "_id name code town city postcode");
 
+  const companies = assignments.map((a) => a.companyId);
+
   res.status(200).json({
     success: true,
-    dish: { _id: dish._id, name: dish.name, menuId: dish.menuId },
-    assignments,
-    total: assignments.length,
+    dishId,
+    companies,
   });
 });
 
