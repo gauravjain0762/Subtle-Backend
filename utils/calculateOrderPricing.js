@@ -58,6 +58,7 @@ const calculateOrderPricing = async ({ workspaceCode, deliveryDate, items, promo
 
     const rawAddons = Array.isArray(item.addons) ? item.addons : [];
     const addonNames = rawAddons.map((addon) => (typeof addon === "string" ? addon : addon?.name));
+    const addonsWithPrices = [];
 
     addonNames.forEach((addonName) => {
       const ingredient = (dish.ingredients || []).find((i) => i.name === addonName);
@@ -70,6 +71,12 @@ const calculateOrderPricing = async ({ workspaceCode, deliveryDate, items, promo
         throw new AppError(`Addon ${addonName} has an invalid price`, 400);
       }
 
+      addonsWithPrices.push({
+        name: addonName,
+        price: addonPrice,
+        qty: 1,
+      });
+
       unitPrice += addonPrice;
     });
 
@@ -80,7 +87,7 @@ const calculateOrderPricing = async ({ workspaceCode, deliveryDate, items, promo
       dishName: dish.name,
       portionSize,
       qty,
-      addons: addonNames,
+      addons: addonsWithPrices,
       unitPrice,
       images: dish.images,
     };

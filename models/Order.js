@@ -1,12 +1,21 @@
 const mongoose = require("mongoose");
 
+const addonSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    price: { type: Number, required: true },
+    qty: { type: Number, default: 1 },
+  },
+  { _id: false }
+);
+
 const orderItemSchema = new mongoose.Schema(
   {
     dishId: { type: mongoose.Schema.Types.ObjectId, required: true },
     dishName: { type: String, required: true },
     portionSize: { type: String },
     qty: { type: Number, required: true, min: 1 },
-    addons: { type: [String], default: [] },
+    addons: { type: [addonSchema], default: [] },
     unitPrice: { type: Number, required: true },
     images: { type: [String], default: [] },
   },
