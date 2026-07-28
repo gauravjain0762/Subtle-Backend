@@ -1,4 +1,4 @@
-const { stripe } = require("../config/stripe");
+const { getStripe } = require("../config/stripe");
 const Order = require("../models/Order");
 const Subscription = require("../models/Subscription");
 
@@ -7,7 +7,7 @@ exports.handleStripeWebhook = async (req, res) => {
 
   let event;
   try {
-    event = stripe.webhooks.constructEvent(req.body, signature, process.env.STRIPE_WEBHOOK_SECRET);
+    event = getStripe().webhooks.constructEvent(req.body, signature, process.env.STRIPE_WEBHOOK_SECRET);
   } catch (err) {
     console.error(`[stripeWebhook] Signature verification failed: ${err.message}`);
     return res.status(400).send(`Webhook Error: ${err.message}`);

@@ -1,25 +1,56 @@
 const Stripe = require("stripe");
 
-const stripeMode = process.env.STRIPE_MODE || "test";
+let stripeMode = process.env.STRIPE_MODE || "test";
+let secretKey = null;
+let publishableKey = null;
+let stripe = null;
 
-const secretKey = stripeMode === "live"
-  ? process.env.STRIPE_LIVE_SECRET_KEY
-  : process.env.STRIPE_TEST_SECRET_KEY;
+function initializeStripe() {
+  secretKey = stripeMode === "live"
+    ? process.env.STRIPE_LIVE_SECRET_KEY
+    : process.env.STRIPE_TEST_SECRET_KEY;
 
-const publishableKey = stripeMode === "live"
-  ? process.env.STRIPE_LIVE_PUBLISHABLE_KEY
-  : process.env.STRIPE_TEST_PUBLISHABLE_KEY;
+  publishableKey = stripeMode === "live"
+    ? process.env.STRIPE_LIVE_PUBLISHABLE_KEY
+    : process.env.STRIPE_TEST_PUBLISHABLE_KEY;
 
-if (!secretKey) {
-  throw new Error(`Stripe ${stripeMode} secret key not configured`);
+  if (!secretKey) {
+    console.warn(`⚠️  Stripe ${stripeMode} secret key not configured. Stripe will not work until configured via admin panel.`);
+    return false;
+  }
+
+  if (!publishableKey) {
+    console.warn(`⚠️  Stripe ${stripeMode} publishable key not configured. Stripe will not work until configured via admin panel.`);
+    return false;
+  }
+
+  stripe = new Stripe(secretKey, {
+    apiVersion: "2023-10-16",
+  });
+
+  console.log(`✅ Stripe initialized in ${stripeMode} mode`);
+  return true;
 }
 
-if (!publishableKey) {
-  throw new Error(`Stripe ${stripeMode} publishable key not configured`);
+function setStripeMode(mode, newSecretKey, newPublishableKey) {
+  stripeMode = mode;
+  secretKey = newSecretKey;
+  publishableKey = newPublishableKey;
+
+  if (secretKey) {
+    stripe = new Stripe(secretKey, {
+      apiVersion: "2023-10-16",
+    });
+  }
 }
 
-const stripe = new Stripe(secretKey, {
-  apiVersion: "2023-10-16",
-});
+function getStripe() {
+  if (!stripe) {
+    throw new Error("Stripe not configured. Please configure test or live keys via admin panel.");
+  }
+  return stripe;
+}
 
-module.exports = { stripe, publishableKey, stripeMode };
+initializeStripe();
+
+module.exports = { getStripe, setStripeMode, getMode: () => stripeMode, publishableKey: () => publishableKey };

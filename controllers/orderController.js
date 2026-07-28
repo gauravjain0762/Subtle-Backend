@@ -6,7 +6,7 @@ const catchAsync = require("../utils/catchAsync");
 const { generateDailyRef } = require("../utils/generateRef");
 const getNextSequence = require("../utils/getNextSequence");
 const { calculateOrderPricing } = require("../utils/calculateOrderPricing");
-const { stripe } = require("../config/stripe");
+const { getStripe } = require("../config/stripe");
 
 exports.createOrder = catchAsync(async (req, res) => {
   const {
@@ -104,7 +104,7 @@ exports.createOrder = catchAsync(async (req, res) => {
       ? process.env.FRONTEND_URL
       : "http://localhost:3000";
 
-    const session = await stripe.checkout.sessions.create({
+    const session = await getStripe().checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "payment",
       currency: "gbp",

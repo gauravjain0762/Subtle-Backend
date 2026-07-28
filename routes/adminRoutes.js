@@ -46,6 +46,11 @@ const {
   getAssignedCompanies,
   unassignDishFromCompanies,
 } = require("../controllers/adminDishAssignmentController");
+const {
+  getStripeMode,
+  switchStripeMode,
+  configureStripeKeys,
+} = require("../controllers/adminStripeSettingsController");
 
 const router = express.Router();
 
@@ -91,5 +96,9 @@ router.get("/companies", listCompanies);
 router.post("/dishes/:dishId/assign-companies", assignDishToCompanies);
 router.get("/dishes/:dishId/assigned-companies", getAssignedCompanies);
 router.delete("/dishes/:dishId/unassign-companies", unassignDishFromCompanies);
+
+router.get("/stripe/mode", getStripeMode);
+router.post("/stripe/mode", switchStripeMode);
+router.post("/stripe/configure", configureStripeKeys);
 
 module.exports = router;

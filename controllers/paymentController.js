@@ -1,4 +1,4 @@
-const { stripe } = require("../config/stripe");
+const { getStripe } = require("../config/stripe");
 const Workspace = require("../models/Workspace");
 const User = require("../models/User");
 const Subscription = require("../models/Subscription");
@@ -17,7 +17,7 @@ const getOrCreateStripeCustomer = async (user) => {
     return user.stripeCustomerId;
   }
 
-  const customer = await stripe.customers.create({
+  const customer = await getStripe().customers.create({
     email: user.email,
     name: `${user.firstName} ${user.lastName}`.trim() || undefined,
     metadata: { userId: user._id.toString() },
@@ -44,7 +44,7 @@ exports.createOrderPaymentIntent = catchAsync(async (req, res) => {
 
   const amountInPence = Math.round(total * 100);
 
-  const paymentIntent = await stripe.paymentIntents.create({
+  const paymentIntent = await getStripe().paymentIntents.create({
     amount: amountInPence,
     currency: "gbp",
     automatic_payment_methods: { enabled: true, allow_redirects: "never" },
@@ -67,7 +67,7 @@ exports.createOrderPaymentIntent = catchAsync(async (req, res) => {
 exports.createSetupIntent = catchAsync(async (req, res) => {
   const customerId = await getOrCreateStripeCustomer(req.user);
 
-  const setupIntent = await stripe.setupIntents.create({
+  const setupIntent = await getStripe().setupIntents.create({
     customer: customerId,
     payment_method_types: ["card"],
   });
@@ -93,12 +93,12 @@ exports.createWeeklySubscription = catchAsync(async (req, res) => {
 
   const customerId = await getOrCreateStripeCustomer(req.user);
 
-  const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
+  const paymentMethod = await getStripe().paymentMethods.retrieve(paymentMethodId);
   if (paymentMethod.customer !== customerId) {
-    await stripe.paymentMethods.attach(paymentMethodId, { customer: customerId });
+    await getStripe().paymentMethods.attach(paymentMethodId, { customer: customerId });
   }
 
-  await stripe.customers.update(customerId, {
+  await getStripe().customers.update(customerId, {
     invoice_settings: { default_payment_method: paymentMethodId },
   });
 
@@ -107,7 +107,7 @@ exports.createWeeklySubscription = catchAsync(async (req, res) => {
     throw new AppError("Weekly plan is not configured", 500);
   }
 
-  const stripeSubscription = await stripe.subscriptions.create({
+  const stripeSubscription = await getStripe().subscriptions.create({
     customer: customerId,
     items: [{ price: priceId }],
     expand: ["latest_invoice.payment_intent"],
