@@ -163,7 +163,24 @@ exports.getOrderBySession = catchAsync(async (req, res) => {
     price: item.unitPrice,
   }));
 
-  res.status(200).json({ success: true, order: orderData });
+  res.status(200).json({
+    success: true,
+    order: {
+      _id: orderData._id,
+      orderRef: orderData.orderRef,
+      orderNumber: orderData.orderNumber,
+      deliveryDate: orderData.deliveryDate,
+      lunchTime: orderData.lunchTime,
+      total: orderData.total,
+      subtotal: orderData.subtotal,
+      discount: orderData.discount,
+      items: orderData.items,
+      workspaceCode: orderData.workspaceCode,
+      workspaceName: orderData.workspaceName,
+      paid: orderData.paid,
+      createdAt: orderData.createdAt,
+    },
+  });
 });
 
 exports.getMyOrders = catchAsync(async (req, res) => {
