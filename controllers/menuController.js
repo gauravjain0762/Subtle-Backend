@@ -1,12 +1,35 @@
 const catchAsync = require("../utils/catchAsync");
 const { getCurrentWeekMonToFri, getStandardDishesForDay } = require("../utils/standardMenu");
+const Dish = require("../models/Dish");
+const DishCompanyAssignment = require("../models/DishCompanyAssignment");
 
 exports.getCurrentMenu = catchAsync(async (req, res) => {
   const weekDays = getCurrentWeekMonToFri();
 
   const days = await Promise.all(
     weekDays.map(async ({ day, date, weekdayCode }) => {
-      const dishes = await getStandardDishesForDay(weekdayCode);
+      let dishes = await getStandardDishesForDay(weekdayCode);
+
+      if (req.user) {
+        const companyId = req.user.workspace || req.user._id;
+        const customAssignments = await DishCompanyAssignment.find({
+          companyId,
+          menuId: { $ne: "standard" },
+        }).select("dishId");
+
+        const customDishIds = customAssignments.map((a) => a.dishId);
+
+        if (customDishIds.length > 0) {
+          const customDishes = await Dish.find({
+            _id: { $in: customDishIds },
+            available: true,
+            availableDays: weekdayCode,
+          });
+
+          dishes = [...dishes, ...customDishes];
+        }
+      }
+
       return { day, date, theme: "", closed: false, dishes };
     })
   );
