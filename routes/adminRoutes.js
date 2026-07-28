@@ -40,6 +40,12 @@ const {
   getCustomer,
   updateCustomerStatus,
 } = require("../controllers/adminCustomerController");
+const {
+  listCompanies,
+  assignDishToCompanies,
+  getAssignedCompanies,
+  unassignDishFromCompanies,
+} = require("../controllers/adminDishAssignmentController");
 
 const router = express.Router();
 
@@ -80,5 +86,10 @@ router.delete("/promo-codes/:id", deletePromoCode);
 router.get("/customers", listCustomers);
 router.get("/customers/:id", getCustomer);
 router.patch("/customers/:id/status", updateCustomerStatus);
+
+router.get("/companies", listCompanies);
+router.post("/dishes/:dishId/assign-companies", assignDishToCompanies);
+router.get("/dishes/:dishId/assigned-companies", getAssignedCompanies);
+router.delete("/dishes/:dishId/unassign-companies", unassignDishFromCompanies);
 
 module.exports = router;
