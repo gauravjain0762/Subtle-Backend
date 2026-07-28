@@ -1,4 +1,4 @@
-const stripe = require("../config/stripe");
+const { stripe } = require("../config/stripe");
 const Order = require("../models/Order");
 const Subscription = require("../models/Subscription");
 

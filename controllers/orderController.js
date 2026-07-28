@@ -6,7 +6,7 @@ const catchAsync = require("../utils/catchAsync");
 const { generateDailyRef } = require("../utils/generateRef");
 const getNextSequence = require("../utils/getNextSequence");
 const { calculateOrderPricing } = require("../utils/calculateOrderPricing");
-const stripe = require("../config/stripe");
+const { stripe } = require("../config/stripe");
 
 exports.createOrder = catchAsync(async (req, res) => {
   const {
