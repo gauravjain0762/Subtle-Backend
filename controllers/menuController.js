@@ -4,14 +4,22 @@ const Dish = require("../models/Dish");
 const DishCompanyAssignment = require("../models/DishCompanyAssignment");
 
 exports.getCurrentMenu = catchAsync(async (req, res) => {
+  const Workspace = require("../models/Workspace");
   const weekDays = getCurrentWeekMonToFri();
+
+  let companyId = null;
+  if (req.user && req.user.workspaceCode) {
+    const workspace = await Workspace.findOne({ code: req.user.workspaceCode.toUpperCase() });
+    if (workspace) {
+      companyId = workspace._id;
+    }
+  }
 
   const days = await Promise.all(
     weekDays.map(async ({ day, date, weekdayCode }) => {
       let dishes = await getStandardDishesForDay(weekdayCode);
 
-      if (req.user) {
-        const companyId = req.user.workspace || req.user._id;
+      if (companyId) {
         const customAssignments = await DishCompanyAssignment.find({
           companyId,
           menuId: { $ne: "standard" },
