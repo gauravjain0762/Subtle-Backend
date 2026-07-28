@@ -46,7 +46,16 @@ function setStripeMode(mode, newSecretKey, newPublishableKey) {
 
 function getStripe() {
   if (!stripe) {
-    throw new Error("Stripe not configured. Please configure test or live keys via admin panel.");
+    const mode = stripeMode || "test";
+    const testKey = process.env.STRIPE_TEST_SECRET_KEY;
+    const liveKey = process.env.STRIPE_LIVE_SECRET_KEY;
+
+    throw new Error(
+      `Stripe not configured for ${mode} mode. ` +
+      `Test key available: ${!!testKey}. ` +
+      `Live key available: ${!!liveKey}. ` +
+      `Please check environment variables.`
+    );
   }
   return stripe;
 }
