@@ -25,17 +25,19 @@ exports.createOrder = catchAsync(async (req, res) => {
     throw new AppError("Missing required order fields", 400);
   }
 
-  const MIN_QUANTITY = 75;
+  const MIN_QUANTITY = 1;
+  const MAX_QUANTITY = 100;
+
   for (const item of items) {
-    if (!item.qty || item.qty < MIN_QUANTITY) {
-      throw new AppError(`Each dish must have minimum ${MIN_QUANTITY} servings. ${item.dishName || "Item"} has ${item.qty || 0}.`, 400);
+    if (!item.qty || item.qty < MIN_QUANTITY || item.qty > MAX_QUANTITY) {
+      throw new AppError(`Quantity must be between ${MIN_QUANTITY} and ${MAX_QUANTITY}. ${item.dishName || "Item"} has ${item.qty || 0}.`, 400);
     }
 
     if (Array.isArray(item.addons) && item.addons.length > 0) {
       for (const addon of item.addons) {
         const addonQty = addon.qty || 1;
-        if (addonQty < MIN_QUANTITY) {
-          throw new AppError(`Each add-on must have minimum ${MIN_QUANTITY} servings. ${addon.name} has ${addonQty}.`, 400);
+        if (addonQty < MIN_QUANTITY || addonQty > MAX_QUANTITY) {
+          throw new AppError(`Add-on quantity must be between ${MIN_QUANTITY} and ${MAX_QUANTITY}. ${addon.name} has ${addonQty}.`, 400);
         }
       }
     }
