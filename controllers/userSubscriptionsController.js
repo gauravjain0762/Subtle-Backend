@@ -102,11 +102,8 @@ exports.selectPlan = catchAsync(async (req, res) => {
       selectedPattern,
       nextDeliveries: nextDeliveryDates,
     },
-    paymentIntent: {
-      clientSecret: paymentIntent.client_secret,
-      amount: plan.price,
-      currency: "gbp",
-    },
+    paymentIntentId: paymentIntent.id,
+    clientSecret: paymentIntent.client_secret,
   });
 });
 
