@@ -51,6 +51,19 @@ const {
   switchStripeMode,
   configureStripeKeys,
 } = require("../controllers/adminStripeSettingsController");
+const {
+  createPlan,
+  listPlans,
+  getPlan,
+  updatePlan,
+  deletePlan,
+} = require("../controllers/adminPlansController");
+const {
+  listSubscriptions,
+  getSubscriptionDetail,
+  listSubscriptionOrders,
+  getBillingReport,
+} = require("../controllers/adminSubscriptionsController");
 
 const router = express.Router();
 
@@ -100,5 +113,16 @@ router.delete("/dishes/:dishId/unassign-companies", unassignDishFromCompanies);
 router.get("/stripe/mode", getStripeMode);
 router.post("/stripe/mode", switchStripeMode);
 router.post("/stripe/configure", configureStripeKeys);
+
+router.post("/plans", createPlan);
+router.get("/plans", listPlans);
+router.get("/plans/:id", getPlan);
+router.patch("/plans/:id", updatePlan);
+router.delete("/plans/:id", deletePlan);
+
+router.get("/subscriptions", listSubscriptions);
+router.get("/subscriptions/:id", getSubscriptionDetail);
+router.get("/subscription-orders", listSubscriptionOrders);
+router.get("/billing/report", getBillingReport);
 
 module.exports = router;

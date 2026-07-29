@@ -1,10 +1,26 @@
 const express = require("express");
-const { getMySubscription, updateMySubscription } = require("../controllers/subscriptionController");
 const protect = require("../middleware/auth");
+const {
+  getAvailablePlans,
+  selectPlan,
+  checkout,
+  getMySubscription,
+  getUpcomingOrders,
+  pauseSubscription,
+  resumeSubscription,
+} = require("../controllers/userSubscriptionsController");
 
 const router = express.Router();
 
-router.get("/my", protect, getMySubscription);
-router.patch("/my", protect, updateMySubscription);
+router.get("/available-plans", getAvailablePlans);
+
+router.use(protect);
+
+router.post("/select-plan", selectPlan);
+router.post("/checkout", checkout);
+router.get("/my-plan", getMySubscription);
+router.get("/upcoming-orders", getUpcomingOrders);
+router.post("/pause", pauseSubscription);
+router.post("/resume", resumeSubscription);
 
 module.exports = router;
