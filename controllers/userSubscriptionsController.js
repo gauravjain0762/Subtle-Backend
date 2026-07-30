@@ -492,13 +492,21 @@ exports.updateSubscription = catchAsync(async (req, res) => {
   let subscription;
 
   if (action === "pause") {
-    if (!startDate) {
-      throw new AppError("startDate is required for pause action", 400);
+    // Pause immediately - no startDate needed
+    // User can optionally specify pausedFrom if they want to pause from a future date
+    const pauseData = {
+      status: "paused"
+    };
+
+    if (startDate) {
+      pauseData.pausedFrom = new Date(startDate);
+    } else {
+      pauseData.pausedFrom = new Date(); // Pause from now
     }
 
     subscription = await Subscription.findOneAndUpdate(
       { user: userId, status: "active" },
-      { status: "paused", pausedFrom: new Date(startDate) },
+      pauseData,
       { new: true }
     ).populate("meal").populate("plan");
 
