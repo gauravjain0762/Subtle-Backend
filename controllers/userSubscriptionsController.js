@@ -480,6 +480,55 @@ exports.getUpcomingOrders = catchAsync(async (req, res) => {
   res.status(200).json({ success: true, orders });
 });
 
+// Unified pause/resume endpoint - matches frontend expectations
+exports.updateSubscription = catchAsync(async (req, res) => {
+  const { action, startDate } = req.body;
+  const userId = req.user._id;
+
+  if (!action || !["pause", "resume"].includes(action)) {
+    throw new AppError("action must be 'pause' or 'resume'", 400);
+  }
+
+  let subscription;
+
+  if (action === "pause") {
+    if (!startDate) {
+      throw new AppError("startDate is required for pause action", 400);
+    }
+
+    subscription = await Subscription.findOneAndUpdate(
+      { user: userId, status: "active" },
+      { status: "paused", pausedFrom: new Date(startDate) },
+      { new: true }
+    ).populate("meal").populate("plan");
+
+    if (!subscription) {
+      throw new AppError("No active subscription found", 404);
+    }
+
+    console.log(`⏸️ Subscription paused: ${subscription._id}`);
+  } else if (action === "resume") {
+    subscription = await Subscription.findOneAndUpdate(
+      { user: userId, status: "paused" },
+      { status: "active", pausedFrom: null },
+      { new: true }
+    ).populate("meal").populate("plan");
+
+    if (!subscription) {
+      throw new AppError("No paused subscription found", 404);
+    }
+
+    console.log(`▶️ Subscription resumed: ${subscription._id}`);
+  }
+
+  res.status(200).json({
+    success: true,
+    message: `Subscription ${action}ed successfully`,
+    subscription: subscription.toObject(),
+  });
+});
+
+// Legacy endpoints - kept for backward compatibility
 exports.pauseSubscription = catchAsync(async (req, res) => {
   const { startDate } = req.body;
 

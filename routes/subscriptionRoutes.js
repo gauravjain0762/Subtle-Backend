@@ -7,6 +7,7 @@ const {
   verifyCheckoutSession,
   getMySubscription,
   getUpcomingOrders,
+  updateSubscription,
   pauseSubscription,
   resumeSubscription,
 } = require("../controllers/userSubscriptionsController");
@@ -22,7 +23,8 @@ router.post("/checkout", checkout);
 router.get("/verify-checkout", verifyCheckoutSession);
 router.get("/my-plan", getMySubscription);
 router.get("/upcoming-orders", getUpcomingOrders);
-router.post("/pause", pauseSubscription);
-router.post("/resume", resumeSubscription);
+router.patch("/my", updateSubscription);  // ← New unified endpoint
+router.post("/pause", pauseSubscription);  // ← Legacy endpoint
+router.post("/resume", resumeSubscription);  // ← Legacy endpoint
 
 module.exports = router;
