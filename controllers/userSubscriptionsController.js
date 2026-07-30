@@ -232,6 +232,19 @@ exports.verifyCheckoutSession = catchAsync(async (req, res) => {
   // Extract metadata
   const { planId, mealId, mealPrice, quantity, startDate, patternId } = session.metadata;
 
+  // Check if user already has an active subscription
+  const existingSubscription = await Subscription.findOne({
+    user: userId,
+    status: "active"
+  });
+
+  if (existingSubscription) {
+    throw new AppError(
+      "You already have an active subscription. Pause or cancel your current subscription to create a new one.",
+      400
+    );
+  }
+
   // Get plan
   const plan = await Plan.findById(planId);
   if (!plan || plan.status !== "active") {
