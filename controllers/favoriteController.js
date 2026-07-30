@@ -10,11 +10,17 @@ exports.getFavorites = catchAsync(async (req, res) => {
   const favorites = await Favorite.find({ user: userId })
     .populate({
       path: "dish",
-      select: "name description price images category availability",
+      select: "name price images category",
     })
     .sort({ createdAt: -1 });
 
-  const dishes = favorites.map((fav) => fav.dish);
+  const dishes = favorites.map((fav) => ({
+    _id: fav.dish._id,
+    name: fav.dish.name,
+    price: String(fav.dish.price),
+    category: fav.dish.category,
+    images: fav.dish.images || [],
+  }));
 
   res.status(200).json({
     success: true,
