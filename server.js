@@ -20,6 +20,7 @@ const cartRoutes = require("./routes/cartRoutes");
 const promoRoutes = require("./routes/promoRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const webhookRoutes = require("./routes/webhookRoutes");
+const favoriteRoutes = require("./routes/favoriteRoutes");
 
 connectDB();
 
@@ -50,6 +51,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/promo", promoRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/favorites", favoriteRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ success: false, error: "Route not found" });
