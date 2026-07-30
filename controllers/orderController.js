@@ -14,7 +14,7 @@ exports.createOrder = catchAsync(async (req, res) => {
     deliveryDate,
     lunchTime,
     items,
-    isWeeklySubscription,
+    planType,
     promoCode,
     paymentMethod,
     paymentIntentId,
@@ -55,8 +55,12 @@ exports.createOrder = catchAsync(async (req, res) => {
     promoCode,
   });
 
-  if (paymentMethod && !["card", "apple_pay", "google_pay"].includes(paymentMethod)) {
+  if (paymentMethod && !["card", "apple_pay", "google_pay", "subscription"].includes(paymentMethod)) {
     throw new AppError("Invalid payment method", 400);
+  }
+
+  if (planType && !["one-time", "weekly", "one-off"].includes(planType)) {
+    throw new AppError("Invalid planType. Must be 'one-time', 'weekly', or 'one-off'", 400);
   }
 
   let paid = false;
@@ -93,11 +97,19 @@ exports.createOrder = catchAsync(async (req, res) => {
     promoCode: appliedPromoCode,
     discount,
     total,
-    isWeeklySubscription: Boolean(isWeeklySubscription),
+    planType: planType || "one-time",
     paymentMethod: paymentMethod || "card",
     paymentIntentId: paymentIntentId || undefined,
     paid,
   });
+
+  // Create recurring orders based on planType
+  if (planType === "weekly") {
+    await createWeeklyRecurringOrders(order);
+  } else if (planType === "one-off") {
+    await createOneOffRecurringOrders(order);
+  }
+  // For one-time, no recurring orders needed
 
   await Cart.deleteOne({ user: req.user._id });
 
@@ -208,3 +220,81 @@ exports.getMyOrders = catchAsync(async (req, res) => {
     },
   });
 });
+
+// Helper: Create weekly recurring orders (4 weeks)
+async function createWeeklyRecurringOrders(order) {
+  try {
+    const startDate = new Date(order.deliveryDate);
+    const dayOfWeek = startDate.getDay();
+
+    for (let week = 1; week < 4; week++) {
+      const nextDate = new Date(startDate);
+      nextDate.setDate(nextDate.getDate() + week * 7);
+      const dateStr = nextDate.toISOString().slice(0, 10);
+
+      const orderRef = await generateDailyRef(Order, "orderRef", "SK", dateStr.replace(/-/g, ""));
+
+      await Order.create({
+        orderRef,
+        orderNumber: `ORD-${await getNextSequence("orderNumber")}`,
+        user: order.user,
+        workspace: order.workspace,
+        workspaceCode: order.workspaceCode,
+        workspaceName: order.workspaceName,
+        deliveryDate: dateStr,
+        lunchTime: order.lunchTime,
+        items: order.items,
+        subtotal: order.subtotal,
+        promoCode: order.promoCode,
+        discount: order.discount,
+        total: order.total,
+        planType: "weekly",
+        paymentMethod: order.paymentMethod,
+        paid: true,
+      });
+    }
+  } catch (error) {
+    console.error("Error creating weekly recurring orders:", error);
+  }
+}
+
+// Helper: Create one-off recurring orders (2 weeks on alternate days)
+async function createOneOffRecurringOrders(order) {
+  try {
+    const startDate = new Date(order.deliveryDate);
+    const alternateDates = [];
+
+    // Create 2 weeks of alternate day orders
+    for (let day = 2; day <= 14; day += 2) {
+      const nextDate = new Date(startDate);
+      nextDate.setDate(nextDate.getDate() + day);
+      alternateDates.push(nextDate);
+    }
+
+    for (const date of alternateDates) {
+      const dateStr = date.toISOString().slice(0, 10);
+      const orderRef = await generateDailyRef(Order, "orderRef", "SK", dateStr.replace(/-/g, ""));
+
+      await Order.create({
+        orderRef,
+        orderNumber: `ORD-${await getNextSequence("orderNumber")}`,
+        user: order.user,
+        workspace: order.workspace,
+        workspaceCode: order.workspaceCode,
+        workspaceName: order.workspaceName,
+        deliveryDate: dateStr,
+        lunchTime: order.lunchTime,
+        items: order.items,
+        subtotal: order.subtotal,
+        promoCode: order.promoCode,
+        discount: order.discount,
+        total: order.total,
+        planType: "one-off",
+        paymentMethod: order.paymentMethod,
+        paid: true,
+      });
+    }
+  } catch (error) {
+    console.error("Error creating one-off recurring orders:", error);
+  }
+}
