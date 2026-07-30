@@ -73,7 +73,13 @@ exports.selectPlan = catchAsync(async (req, res) => {
   // Determine pattern based on plan type
   let pattern = [];
   if (plan.type === "weekly") {
-    pattern = plan.pattern; // e.g., ["Mon", "Tue", "Wed", "Thu", "Fri"]
+    pattern = plan.pattern && plan.pattern.length > 0
+      ? plan.pattern
+      : ["Mon", "Tue", "Wed", "Thu", "Fri"]; // Fallback for backward compatibility
+
+    if (!pattern || pattern.length === 0) {
+      throw new AppError("Weekly plan has no delivery days configured", 400);
+    }
   } else if (plan.type === "one-off") {
     if (!patternId) {
       throw new AppError("patternId is required for one-off plans", 400);
@@ -83,7 +89,13 @@ exports.selectPlan = catchAsync(async (req, res) => {
       throw new AppError("Invalid pattern selected", 400);
     }
     pattern = selectedPattern.days;
+
+    if (!pattern || pattern.length === 0) {
+      throw new AppError("Selected pattern has no delivery days", 400);
+    }
   }
+
+  console.log(`📋 Plan retrieved: type=${plan.type}, pattern=${JSON.stringify(pattern)}`);
 
   // Calculate delivery dates from startDate
   // Parse date carefully to handle timezone issues
