@@ -4,30 +4,29 @@ const AppError = require("../utils/appError");
 const catchAsync = require("../utils/catchAsync");
 
 exports.createPlan = catchAsync(async (req, res) => {
-  const { type, name, description, price, deliveryDays, patterns, status } = req.body;
+  const { type, name, description, pattern, patterns, status } = req.body;
 
-  if (!type || !name || !price) {
-    throw new AppError("type, name, and price are required", 400);
+  if (!type || !name) {
+    throw new AppError("type and name are required", 400);
   }
 
   if (!["weekly", "one-off"].includes(type)) {
     throw new AppError("type must be 'weekly' or 'one-off'", 400);
   }
 
-  if (type === "weekly" && (!deliveryDays || deliveryDays.length === 0)) {
-    throw new AppError("deliveryDays are required for weekly plans", 400);
+  if (type === "weekly" && (!pattern || pattern.length === 0)) {
+    throw new AppError("pattern array is required for weekly plans (e.g., ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'])", 400);
   }
 
   if (type === "one-off" && (!patterns || patterns.length === 0)) {
-    throw new AppError("patterns are required for one-off plans", 400);
+    throw new AppError("patterns array is required for one-off plans (e.g., [{id: 'p1', name: 'Mon-Wed-Fri', days: ['Mon', 'Wed', 'Fri']}])", 400);
   }
 
   const plan = await Plan.create({
     type,
     name,
     description,
-    price,
-    deliveryDays: type === "weekly" ? deliveryDays : [],
+    pattern: type === "weekly" ? pattern : [],
     patterns: type === "one-off" ? patterns : [],
     status: status || "active",
   });
@@ -76,14 +75,13 @@ exports.getPlan = catchAsync(async (req, res) => {
 });
 
 exports.updatePlan = catchAsync(async (req, res) => {
-  const { name, description, price, status } = req.body;
+  const { name, description, status } = req.body;
 
   const plan = await Plan.findByIdAndUpdate(
     req.params.id,
     {
       ...(name && { name }),
       ...(description && { description }),
-      ...(price && { price }),
       ...(status && { status }),
     },
     { new: true, runValidators: true }
