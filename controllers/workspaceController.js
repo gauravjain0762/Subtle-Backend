@@ -1,6 +1,7 @@
 const WorkspaceRequest = require("../models/WorkspaceRequest");
 const Workspace = require("../models/Workspace");
 const User = require("../models/User");
+const Notification = require("../models/Notification");
 const AppError = require("../utils/appError");
 const catchAsync = require("../utils/catchAsync");
 const { isValidEmail } = require("../utils/validators");
@@ -65,6 +66,18 @@ exports.createWorkspaceRequest = catchAsync(async (req, res) => {
     workspaceName: workspace.name,
     contactName: `${contact.firstName} ${contact.lastName}`,
     contactEmail: contact.email.trim().toLowerCase(),
+  });
+
+  // Create notification for admin
+  await Notification.create({
+    type: "workspace_request",
+    title: "New Workspace Request",
+    message: `${workspace.name} has requested workspace access`,
+    data: {
+      workspaceRequestId: null, // Will be fetched separately
+      workspaceName: workspace.name,
+      contactEmail: contact.email.trim().toLowerCase(),
+    },
   });
 
   res.status(201).json({

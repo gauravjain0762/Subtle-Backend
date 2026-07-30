@@ -1,6 +1,7 @@
 const Order = require("../models/Order");
 const Workspace = require("../models/Workspace");
 const Cart = require("../models/Cart");
+const Notification = require("../models/Notification");
 const AppError = require("../utils/appError");
 const catchAsync = require("../utils/catchAsync");
 const { generateDailyRef } = require("../utils/generateRef");
@@ -110,6 +111,20 @@ exports.createOrder = catchAsync(async (req, res) => {
     await createOneOffRecurringOrders(order);
   }
   // For one-time, no recurring orders needed
+
+  // Create notification for admin
+  const planTypeLabel = planType === "one-time" ? "Single Order" : planType === "weekly" ? "Weekly Plan" : "One-Off Plan";
+  await Notification.create({
+    type: "new_order",
+    title: "New Order Placed",
+    message: `New ${planTypeLabel} order from ${workspace.name} - £${total}`,
+    data: {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      orderTotal: total,
+      planType: planType || "one-time",
+    },
+  });
 
   await Cart.deleteOne({ user: req.user._id });
 
