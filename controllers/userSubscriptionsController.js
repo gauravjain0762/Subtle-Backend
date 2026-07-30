@@ -47,9 +47,20 @@ exports.getAvailablePlans = catchAsync(async (req, res) => {
 });
 
 exports.selectPlan = catchAsync(async (req, res) => {
-  const { planId, patternId } = req.body;
+  const { planId, mealId, mealPrice, quantity, startDate, patternId } = req.body;
   const userId = req.user._id;
 
+  // Validate required fields
+  if (!planId || !mealId || !mealPrice || !quantity || !startDate) {
+    throw new AppError("Missing required fields: planId, mealId, mealPrice, quantity, startDate", 400);
+  }
+
+  // Validate quantity
+  if (quantity < 1 || quantity > 100) {
+    throw new AppError("Quantity must be between 1 and 100", 400);
+  }
+
+  // Get plan
   const plan = await Plan.findById(planId);
   if (!plan) {
     throw new AppError("Plan not found", 404);
@@ -59,48 +70,72 @@ exports.selectPlan = catchAsync(async (req, res) => {
     throw new AppError("This plan is no longer available", 400);
   }
 
-  let selectedDays = [];
-  let selectedPattern = null;
-
+  // Determine pattern based on plan type
+  let pattern = [];
   if (plan.type === "weekly") {
-    selectedDays = plan.deliveryDays;
+    pattern = plan.pattern; // e.g., ["Mon", "Tue", "Wed", "Thu", "Fri"]
   } else if (plan.type === "one-off") {
     if (!patternId) {
       throw new AppError("patternId is required for one-off plans", 400);
     }
-    const pattern = plan.patterns.find((p) => p.id === patternId);
-    if (!pattern) {
+    const selectedPattern = plan.patterns.find((p) => p.id === patternId);
+    if (!selectedPattern) {
       throw new AppError("Invalid pattern selected", 400);
     }
-    selectedDays = pattern.days;
-    selectedPattern = pattern.name;
+    pattern = selectedPattern.days;
   }
 
-  const nextMonday = getNextMonday();
-  const nextDeliveryDates = selectedDays.map((day) => {
-    const dayIndex = ["Mon", "Tue", "Wed", "Thu", "Fri"].indexOf(day);
-    const date = new Date(nextMonday);
-    date.setDate(nextMonday.getDate() + dayIndex);
-    return { date, dayOfWeek: day };
+  // Calculate delivery dates from startDate
+  const start = new Date(startDate);
+  start.setHours(0, 0, 0, 0);
+
+  const deliveryDates = [];
+  const dayIndices = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+
+  // For this week (from startDate)
+  pattern.forEach((day) => {
+    const dayIndex = dayIndices.indexOf(day);
+    const date = new Date(start);
+    const startDayIndex = start.getDay() === 0 ? 6 : start.getDay() - 1; // Convert to Mon=0
+    const daysToAdd = dayIndex - startDayIndex;
+
+    if (daysToAdd >= 0) {
+      date.setDate(date.getDate() + daysToAdd);
+      deliveryDates.push({
+        date: date.toISOString().slice(0, 10),
+        dayOfWeek: day,
+      });
+    }
   });
 
+  // Calculate total charge
+  const numDeliveryDays = deliveryDates.length;
+  const totalCharge = mealPrice * quantity * numDeliveryDays;
+
+  // Create Stripe payment intent
   const stripe = getStripe();
   const paymentIntent = await stripe.paymentIntents.create({
-    amount: Math.round(plan.price * 100),
+    amount: Math.round(totalCharge * 100),
     currency: "gbp",
     automatic_payment_methods: { enabled: true },
+    metadata: {
+      planId: planId.toString(),
+      mealId: mealId.toString(),
+      userId: userId.toString(),
+    },
   });
 
   res.status(200).json({
     success: true,
-    subscription: {
-      planId,
+    deliveryDates,
+    summary: {
       planType: plan.type,
       planName: plan.name,
-      price: plan.price,
-      selectedDays,
-      selectedPattern,
-      nextDeliveries: nextDeliveryDates,
+      mealPrice: mealPrice,
+      quantity: quantity,
+      numDeliveryDays: numDeliveryDays,
+      totalCharge: totalCharge,
+      pattern: pattern,
     },
     paymentIntentId: paymentIntent.id,
     clientSecret: paymentIntent.client_secret,
@@ -108,8 +143,13 @@ exports.selectPlan = catchAsync(async (req, res) => {
 });
 
 exports.checkout = catchAsync(async (req, res) => {
-  const { planId, patternId, paymentIntentId } = req.body;
+  const { planId, mealId, mealPrice, quantity, startDate, patternId, paymentIntentId } = req.body;
   const userId = req.user._id;
+
+  // Validate required fields
+  if (!planId || !mealId || !mealPrice || !quantity || !startDate || !paymentIntentId) {
+    throw new AppError("Missing required fields", 400);
+  }
 
   // Check existing subscription
   const existingSub = await Subscription.findOne({ user: userId });
@@ -131,63 +171,85 @@ exports.checkout = catchAsync(async (req, res) => {
     throw new AppError("Plan not found or inactive", 400);
   }
 
-  // Determine selected days
-  let selectedDays = [];
-  let selectedPattern = null;
-
+  // Determine pattern
+  let pattern = [];
   if (plan.type === "weekly") {
-    selectedDays = plan.deliveryDays;
+    pattern = plan.pattern;
   } else {
-    const pattern = plan.patterns.find((p) => p.id === patternId);
-    if (!pattern) {
-      throw new AppError("Invalid pattern", 400);
+    if (!patternId) {
+      throw new AppError("patternId required for one-off plans", 400);
     }
-    selectedDays = pattern.days;
-    selectedPattern = pattern.name;
+    const selectedPattern = plan.patterns.find((p) => p.id === patternId);
+    if (!selectedPattern) {
+      throw new AppError("Invalid pattern selected", 400);
+    }
+    pattern = selectedPattern.days;
   }
 
-  // Create subscription
-  const nextMonday = getNextMonday();
-  const nextBillingDate = new Date(nextMonday);
-  nextBillingDate.setDate(nextBillingDate.getDate() + 7);
+  // Calculate next charge date (next week same pattern)
+  const start = new Date(startDate);
+  const nextChargeDate = new Date(start);
+  nextChargeDate.setDate(nextChargeDate.getDate() + 7);
 
+  // Create subscription
   const subscription = await Subscription.create({
     user: userId,
     plan: planId,
-    planType: plan.type,
-    planName: plan.name,
-    price: plan.price,
-    selectedDays,
-    selectedPattern,
+    meal: mealId,
+    mealPrice,
+    quantity,
+    pattern,
     status: "active",
-    startDate: new Date(),
-    nextBillingDate,
+    startDate: start,
+    nextChargeDate,
     totalCharges: 1,
     billingHistory: [
       {
         date: new Date(),
-        amount: plan.price,
+        amount: mealPrice * quantity * pattern.length,
         status: "succeeded",
         stripeChargeId: paymentIntent.id,
       },
     ],
   });
 
-  // Generate recurring orders
-  await generateRecurringOrders(subscription, nextMonday);
+  // Create orders for each delivery date this week
+  const Order = require("../models/Order");
+  const dayIndices = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+  const deliveryOrders = [];
 
-  // Get upcoming orders
-  const upcomingOrders = await RecurringOrder.find({
-    subscription: subscription._id,
-    status: "scheduled",
-  })
-    .sort({ scheduledDate: 1 })
-    .limit(7);
+  pattern.forEach((day) => {
+    const dayIndex = dayIndices.indexOf(day);
+    const deliveryDate = new Date(start);
+    const startDayIndex = start.getDay() === 0 ? 6 : start.getDay() - 1;
+    const daysToAdd = dayIndex - startDayIndex;
+
+    if (daysToAdd >= 0) {
+      deliveryDate.setDate(deliveryDate.getDate() + daysToAdd);
+      deliveryOrders.push({
+        scheduledDate: deliveryDate,
+        dayOfWeek: day,
+      });
+    }
+  });
 
   res.status(201).json({
     success: true,
-    subscription: subscription.toObject(),
-    upcomingOrders,
+    message: "Subscription created successfully",
+    subscription: {
+      _id: subscription._id,
+      meal: subscription.meal,
+      mealPrice: subscription.mealPrice,
+      quantity: subscription.quantity,
+      pattern: subscription.pattern,
+      status: subscription.status,
+      startDate: subscription.startDate,
+      nextChargeDate: subscription.nextChargeDate,
+      deliveryOrders: deliveryOrders.map((o) => ({
+        date: o.scheduledDate.toISOString().slice(0, 10),
+        dayOfWeek: o.dayOfWeek,
+      })),
+    },
   });
 });
 

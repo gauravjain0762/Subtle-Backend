@@ -21,17 +21,17 @@ function initializeSchedulers() {
   });
   console.log("✓ Scheduler: Create daily orders (6 AM)");
 
-  // Run every Monday at 1 AM
-  cron.schedule("0 1 * * 1", chargeSubscriptions, {
+  // Run every day at 1 AM - Charge subscriptions
+  cron.schedule("0 1 * * *", chargeSubscriptions, {
     name: "Charge Subscriptions",
   });
-  console.log("✓ Scheduler: Auto-charge subscriptions (Monday 1 AM)");
+  console.log("✓ Scheduler: Auto-charge subscriptions (Daily 1 AM)");
 
-  // Run every day at 1 AM
-  cron.schedule("0 1 * * *", resumePausedSubscriptions, {
+  // Run every day at 2 AM - Resume paused subscriptions
+  cron.schedule("0 2 * * *", resumePausedSubscriptions, {
     name: "Resume Paused Subscriptions",
   });
-  console.log("✓ Scheduler: Resume paused subscriptions (Daily 1 AM)");
+  console.log("✓ Scheduler: Resume paused subscriptions (Daily 2 AM)");
 
   console.log("✅ All subscription schedulers initialized");
 }

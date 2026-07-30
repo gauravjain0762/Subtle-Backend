@@ -14,9 +14,8 @@ const planSchema = new mongoose.Schema(
     type: { type: String, enum: ["weekly", "one-off"], required: true },
     name: { type: String, required: true },
     description: { type: String },
-    price: { type: Number, required: true },
-    deliveryDays: { type: [String], default: [] },
-    patterns: { type: [patternSchema], default: [] },
+    pattern: { type: [String], required: true }, // ["Mon", "Tue", "Wed", "Thu", "Fri"] for weekly
+    patterns: { type: [patternSchema], default: [] }, // For one-off: [{"Mon", "Wed", "Fri"}, {"Tue", "Thu"}]
     status: { type: String, enum: ["active", "inactive"], default: "active" },
   },
   { timestamps: true }

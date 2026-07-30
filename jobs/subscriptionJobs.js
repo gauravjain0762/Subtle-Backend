@@ -117,26 +117,34 @@ exports.createOrdersFromSchedule = async () => {
   }
 };
 
-// JOB 3: Auto-charge subscriptions (runs weekly Monday 1 AM)
+// JOB 3: Daily recurring charge check (runs daily)
 exports.chargeSubscriptions = async () => {
   try {
-    console.log("💳 Processing weekly subscription charges...");
+    console.log("💳 Checking for subscriptions to charge...");
 
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Find subscriptions where nextChargeDate is today or earlier
     const subscriptions = await Subscription.find({
       status: "active",
-      nextBillingDate: { $lte: today },
-    }).populate("user");
+      nextChargeDate: { $lte: today },
+    }).populate("user meal");
 
     const stripe = getStripe();
+    const Dish = require("../models/Dish");
 
     for (const subscription of subscriptions) {
       try {
+        // Calculate charge amount
+        const chargeAmount = subscription.mealPrice * subscription.quantity * subscription.pattern.length;
+
+        // Create Stripe charge
         const charge = await stripe.charges.create({
-          amount: Math.round(subscription.price * 100),
+          amount: Math.round(chargeAmount * 100),
           currency: "gbp",
           customer: subscription.user.stripeCustomerId || undefined,
-          description: `Weekly meal plan - ${subscription.planName}`,
+          description: `Meal subscription - ${subscription.meal.name} (${subscription.quantity}x)`,
           metadata: {
             subscriptionId: subscription._id.toString(),
             userId: subscription.user._id.toString(),
@@ -146,25 +154,26 @@ exports.chargeSubscriptions = async () => {
         // Record billing history
         subscription.billingHistory.push({
           date: new Date(),
-          amount: subscription.price,
+          amount: chargeAmount,
           status: "succeeded",
           stripeChargeId: charge.id,
         });
 
-        subscription.totalCharges += 1;
-        subscription.nextBillingDate = new Date(subscription.nextBillingDate);
-        subscription.nextBillingDate.setDate(subscription.nextBillingDate.getDate() + 7);
+        // Update nextChargeDate to next week
+        subscription.nextChargeDate = new Date(today);
+        subscription.nextChargeDate.setDate(subscription.nextChargeDate.getDate() + 7);
 
+        subscription.totalCharges += 1;
         await subscription.save();
 
-        console.log(`✅ Charged ${subscription.user.email}: £${subscription.price}`);
+        console.log(`✅ Charged ${subscription.user.email}: £${chargeAmount}`);
       } catch (err) {
         console.error(`❌ Failed to charge ${subscription.user.email}: ${err.message}`);
 
         // Record failed charge
         subscription.billingHistory.push({
           date: new Date(),
-          amount: subscription.price,
+          amount: subscription.mealPrice * subscription.quantity * subscription.pattern.length,
           status: "failed",
           errorMessage: err.message,
         });
@@ -173,9 +182,9 @@ exports.chargeSubscriptions = async () => {
       }
     }
 
-    console.log("✅ Weekly charging completed");
+    console.log("✅ Subscription charging check completed");
   } catch (error) {
-    console.error("❌ Error charging subscriptions:", error.message);
+    console.error("❌ Error checking subscriptions:", error.message);
   }
 };
 
