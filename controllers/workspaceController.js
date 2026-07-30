@@ -45,10 +45,6 @@ exports.createWorkspaceRequest = catchAsync(async (req, res) => {
     }
   }
 
-  if (!isPostcodeInDeliveryArea(workspace.postcode)) {
-    errors.postcode = "Outside our current delivery area";
-  }
-
   if (Object.keys(errors).length > 0) {
     throw new AppError("Validation failed", 422, errors);
   }
