@@ -86,31 +86,56 @@ exports.selectPlan = catchAsync(async (req, res) => {
   }
 
   // Calculate delivery dates from startDate
-  const start = new Date(startDate);
-  start.setHours(0, 0, 0, 0);
+  // Parse date carefully to handle timezone issues
+  const [year, month, day] = startDate.split("-").map(Number);
+  const start = new Date(year, month - 1, day); // Use local timezone
 
+  const dayMap = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
   const deliveryDates = [];
-  const dayIndices = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 
-  // For this week (from startDate)
+  // Determine the day of week for startDate (JavaScript: 0=Sun, 1=Mon, etc.)
+  const startDayOfWeek = start.getDay(); // 0=Sun, 1=Mon, 2=Tue, etc.
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const startDayName = dayNames[startDayOfWeek];
+
+  console.log(`🔍 DEBUG: startDate=${startDate}, dayOfWeek=${startDayName} (${startDayOfWeek}), pattern=${JSON.stringify(pattern)}`);
+
+  // For each day in the pattern, calculate if it's this week or next
   pattern.forEach((day) => {
-    const dayIndex = dayIndices.indexOf(day);
-    const date = new Date(start);
-    const startDayIndex = start.getDay() === 0 ? 6 : start.getDay() - 1; // Convert to Mon=0
-    const daysToAdd = dayIndex - startDayIndex;
+    const patternDayOfWeek = dayMap[day];
+    let daysToAdd = patternDayOfWeek - startDayOfWeek;
 
-    if (daysToAdd >= 0) {
-      date.setDate(date.getDate() + daysToAdd);
+    // If daysToAdd is negative, it's next week (but we only do this week for initial)
+    if (daysToAdd < 0) {
+      daysToAdd += 7; // Make it next week
+    }
+
+    // Only include if it's this week (daysToAdd >= 0 and <= 6)
+    if (daysToAdd >= 0 && daysToAdd <= 6) {
+      const deliveryDate = new Date(start);
+      deliveryDate.setDate(deliveryDate.getDate() + daysToAdd);
       deliveryDates.push({
-        date: date.toISOString().slice(0, 10),
+        date: deliveryDate.toISOString().slice(0, 10),
         dayOfWeek: day,
       });
     }
   });
 
+  console.log(`📅 Delivery dates calculated: ${JSON.stringify(deliveryDates)}`);
+
   // Calculate total charge
   const numDeliveryDays = deliveryDates.length;
   const totalCharge = mealPrice * quantity * numDeliveryDays;
+
+  console.log(`💰 Charge calculation: £${mealPrice} × ${quantity} × ${numDeliveryDays} days = £${totalCharge}`);
+
+  if (numDeliveryDays === 0) {
+    throw new AppError("No delivery dates found for the selected pattern and start date", 400);
+  }
+
+  if (totalCharge < 0.30) {
+    throw new AppError(`Charge too low: £${totalCharge}. Minimum charge is £0.30`, 400);
+  }
 
   // Create Stripe payment intent
   const stripe = getStripe();
