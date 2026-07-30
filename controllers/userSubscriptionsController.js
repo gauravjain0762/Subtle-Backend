@@ -426,7 +426,15 @@ exports.checkout = catchAsync(async (req, res) => {
 });
 
 exports.getMySubscription = catchAsync(async (req, res) => {
-  const subscription = await Subscription.findOne({ user: req.user._id });
+  const subscription = await Subscription.findOne({ user: req.user._id })
+    .populate({
+      path: "meal",
+      select: "name price description images category"
+    })
+    .populate({
+      path: "plan",
+      select: "name type description"
+    });
 
   if (!subscription) {
     return res.status(200).json({ success: true, subscription: null });
