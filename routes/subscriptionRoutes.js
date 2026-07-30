@@ -4,6 +4,7 @@ const {
   getAvailablePlans,
   selectPlan,
   checkout,
+  verifyCheckoutSession,
   getMySubscription,
   getUpcomingOrders,
   pauseSubscription,
@@ -18,6 +19,7 @@ router.use(protect);
 
 router.post("/select-plan", selectPlan);
 router.post("/checkout", checkout);
+router.get("/verify-checkout", verifyCheckoutSession);
 router.get("/my-plan", getMySubscription);
 router.get("/upcoming-orders", getUpcomingOrders);
 router.post("/pause", pauseSubscription);

@@ -149,18 +149,45 @@ exports.selectPlan = catchAsync(async (req, res) => {
     throw new AppError(`Charge too low: £${totalCharge}. Minimum charge is £0.30`, 400);
   }
 
-  // Create Stripe payment intent
+  // Create Stripe Checkout Session
   const stripe = getStripe();
-  const paymentIntent = await stripe.paymentIntents.create({
-    amount: Math.round(totalCharge * 100),
+
+  const baseUrl = process.env.NODE_ENV === "production"
+    ? process.env.FRONTEND_URL || "https://subtlekitchen.co.uk"
+    : "http://localhost:3000";
+
+  const checkoutSession = await stripe.checkout.sessions.create({
+    payment_method_types: ["card"],
+    mode: "payment",
     currency: "gbp",
-    automatic_payment_methods: { enabled: true },
+    customer_email: req.user.email,
+    line_items: [
+      {
+        price_data: {
+          currency: "gbp",
+          product_data: {
+            name: `${plan.name} Subscription - ${quantity}x ${pattern.length} days`,
+            description: `${deliveryDates.map((d) => d.date).join(", ")}`,
+          },
+          unit_amount: Math.round(totalCharge * 100),
+        },
+        quantity: 1,
+      },
+    ],
+    success_url: `${baseUrl}/confirmation?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${baseUrl}/subscription/review?cancelled=true`,
     metadata: {
       planId: planId.toString(),
       mealId: mealId.toString(),
-      userId: userId.toString(),
+      userId: req.user._id.toString(),
+      mealPrice: mealPrice.toString(),
+      quantity: quantity.toString(),
+      startDate: startDate,
+      patternId: patternId || "none",
     },
   });
+
+  console.log(`🔗 Checkout session created: ${checkoutSession.id}`);
 
   res.status(200).json({
     success: true,
@@ -174,11 +201,104 @@ exports.selectPlan = catchAsync(async (req, res) => {
       totalCharge: totalCharge,
       pattern: pattern,
     },
-    paymentIntentId: paymentIntent.id,
-    clientSecret: paymentIntent.client_secret,
+    checkoutUrl: checkoutSession.url,
+    checkoutSessionId: checkoutSession.id,
   });
 });
 
+// Verify Stripe checkout session and create subscription
+exports.verifyCheckoutSession = catchAsync(async (req, res) => {
+  const { sessionId } = req.query;
+  const userId = req.user._id;
+
+  if (!sessionId) {
+    throw new AppError("Session ID is required", 400);
+  }
+
+  // Retrieve the checkout session from Stripe
+  const stripe = getStripe();
+  const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+  if (!session) {
+    throw new AppError("Checkout session not found", 404);
+  }
+
+  if (session.payment_status !== "paid") {
+    throw new AppError("Payment not completed", 400);
+  }
+
+  // Extract metadata
+  const { planId, mealId, mealPrice, quantity, startDate, patternId } = session.metadata;
+
+  // Get plan
+  const plan = await Plan.findById(planId);
+  if (!plan || plan.status !== "active") {
+    throw new AppError("Plan not found or inactive", 400);
+  }
+
+  // Determine pattern
+  let pattern = [];
+  if (plan.type === "weekly") {
+    pattern = plan.pattern && plan.pattern.length > 0
+      ? plan.pattern
+      : ["Mon", "Tue", "Wed", "Thu", "Fri"];
+  } else if (plan.type === "one-off") {
+    if (!patternId || patternId === "none") {
+      throw new AppError("patternId required for one-off plans", 400);
+    }
+    const selectedPattern = plan.patterns.find((p) => p.id === patternId);
+    if (!selectedPattern) {
+      throw new AppError("Invalid pattern selected", 400);
+    }
+    pattern = selectedPattern.days;
+  }
+
+  // Calculate next charge date
+  const start = new Date(startDate);
+  const nextChargeDate = new Date(start);
+  nextChargeDate.setDate(nextChargeDate.getDate() + 7);
+
+  // Create subscription
+  const subscription = await Subscription.create({
+    user: userId,
+    plan: planId,
+    meal: mealId,
+    mealPrice: parseFloat(mealPrice),
+    quantity: parseInt(quantity),
+    pattern,
+    status: "active",
+    startDate: start,
+    nextChargeDate,
+    totalCharges: 1,
+    billingHistory: [
+      {
+        date: new Date(),
+        amount: parseFloat(mealPrice) * parseInt(quantity) * pattern.length,
+        status: "succeeded",
+        stripeChargeId: session.payment_intent,
+      },
+    ],
+  });
+
+  console.log(`✅ Subscription created after checkout: ${subscription._id}`);
+
+  res.status(201).json({
+    success: true,
+    message: "Payment successful! Subscription created.",
+    subscription: {
+      _id: subscription._id,
+      meal: subscription.meal,
+      mealPrice: subscription.mealPrice,
+      quantity: subscription.quantity,
+      pattern: subscription.pattern,
+      status: subscription.status,
+      startDate: subscription.startDate,
+      nextChargeDate: subscription.nextChargeDate,
+    },
+  });
+});
+
+// Legacy checkout - kept for backward compatibility
 exports.checkout = catchAsync(async (req, res) => {
   const { planId, mealId, mealPrice, quantity, startDate, patternId, paymentIntentId } = req.body;
   const userId = req.user._id;
