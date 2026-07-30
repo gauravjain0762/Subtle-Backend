@@ -208,16 +208,18 @@ exports.selectPlan = catchAsync(async (req, res) => {
 
 // Verify Stripe checkout session and create subscription
 exports.verifyCheckoutSession = catchAsync(async (req, res) => {
-  const { sessionId } = req.query;
+  const { session_id } = req.query;  // ✅ Match URL parameter name
   const userId = req.user._id;
 
-  if (!sessionId) {
+  if (!session_id) {
     throw new AppError("Session ID is required", 400);
   }
 
+  console.log(`🔍 Verifying checkout session: ${session_id}`);
+
   // Retrieve the checkout session from Stripe
   const stripe = getStripe();
-  const session = await stripe.checkout.sessions.retrieve(sessionId);
+  const session = await stripe.checkout.sessions.retrieve(session_id);
 
   if (!session) {
     throw new AppError("Checkout session not found", 404);
