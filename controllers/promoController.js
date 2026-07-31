@@ -44,6 +44,7 @@ exports.markPromoAsUsed = catchAsync(async (req, res) => {
   });
 });
 
+// Get active promo codes for website display (public endpoint - no auth required)
 exports.listActivePromoCodes = catchAsync(async (req, res) => {
   const { workspaceCode } = req.query;
 
@@ -68,6 +69,36 @@ exports.listActivePromoCodes = catchAsync(async (req, res) => {
       label: p.label,
       description: p.description,
       expiresAt: p.expiresAt,
+      oneTimeUse: p.oneTimeUse,
+      firstTimeUserOnly: p.firstTimeUserOnly,
+      restrictions: buildRestrictions(p),
     })),
   });
 });
+
+// Helper function to build human-readable restrictions
+function buildRestrictions(promo) {
+  const restrictions = [];
+
+  if (promo.firstTimeUserOnly) {
+    restrictions.push("For first-time users only");
+  }
+
+  if (promo.oneTimeUse) {
+    restrictions.push("Can be used once per user");
+  }
+
+  if (promo.expiresAt) {
+    const expiryDate = new Date(promo.expiresAt);
+    restrictions.push(`Valid until ${expiryDate.toLocaleDateString('en-GB')}`);
+  }
+
+  if (promo.maxUses && promo.usageCount) {
+    const remaining = promo.maxUses - promo.usageCount;
+    if (remaining > 0) {
+      restrictions.push(`Limited to ${remaining} more uses`);
+    }
+  }
+
+  return restrictions.length > 0 ? restrictions : null;
+}
