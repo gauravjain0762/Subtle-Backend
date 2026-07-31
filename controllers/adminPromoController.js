@@ -2,16 +2,21 @@ const PromoCode = require("../models/PromoCode");
 const AppError = require("../utils/appError");
 const catchAsync = require("../utils/catchAsync");
 
-const ALLOWED_FIELDS = ["type", "value", "label", "description", "active", "expiresAt", "workspaceCodes"];
+const ALLOWED_FIELDS = ["type", "value", "label", "description", "active", "expiresAt", "workspaceCodes", "oneTimeUse", "firstTimeUserOnly", "maxUses"];
 
 const normalizeWorkspaceCodes = (codes) =>
   Array.isArray(codes) ? codes.map((c) => String(c).trim().toUpperCase()) : [];
 
 exports.createPromoCode = catchAsync(async (req, res) => {
-  const { code, type, value, label, description, active, expiresAt, workspaceCodes } = req.body || {};
+  const { code, type, value, label, description, active, expiresAt, workspaceCodes, oneTimeUse, firstTimeUserOnly, maxUses } = req.body || {};
 
   if (!code || !["percentage", "fixed"].includes(type) || value === undefined) {
     throw new AppError("code, type (percentage|fixed) and value are required", 400);
+  }
+
+  // Validate percentage promo codes
+  if (type === "percentage" && (value < 0 || value > 100)) {
+    throw new AppError("Percentage value must be between 0 and 100", 400);
   }
 
   const normalizedCode = code.trim().toUpperCase();
@@ -25,12 +30,17 @@ exports.createPromoCode = catchAsync(async (req, res) => {
     code: normalizedCode,
     type,
     value,
-    label,
+    label: label || `${value}${type === "percentage" ? "%" : "£"} off`,
     description,
     active: active !== undefined ? Boolean(active) : true,
     expiresAt: expiresAt ? new Date(expiresAt) : undefined,
     workspaceCodes: normalizeWorkspaceCodes(workspaceCodes),
+    oneTimeUse: Boolean(oneTimeUse),
+    firstTimeUserOnly: Boolean(firstTimeUserOnly),
+    maxUses: maxUses ? parseInt(maxUses) : undefined,
   });
+
+  console.log(`🎟️ Promo code created: ${normalizedCode} ${oneTimeUse ? "(One-time use)" : ""} ${firstTimeUserOnly ? "(First-time users only)" : ""}`);
 
   res.status(201).json({ success: true, promoCode });
 });

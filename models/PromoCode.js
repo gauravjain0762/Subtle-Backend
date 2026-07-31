@@ -10,6 +10,12 @@ const promoCodeSchema = new mongoose.Schema(
     active: { type: Boolean, default: true },
     expiresAt: { type: Date },
     workspaceCodes: { type: [String], default: [] },
+    // New fields for one-time use & first-time users
+    oneTimeUse: { type: Boolean, default: false },
+    firstTimeUserOnly: { type: Boolean, default: false },
+    usedBy: { type: [mongoose.Schema.Types.ObjectId], ref: "User", default: [] },
+    maxUses: { type: Number }, // Optional: limit total uses
+    usageCount: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

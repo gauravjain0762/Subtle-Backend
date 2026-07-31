@@ -1,9 +1,11 @@
 const express = require("express");
-const { validatePromo, listActivePromoCodes } = require("../controllers/promoController");
+const protect = require("../middleware/auth");
+const { validatePromo, listActivePromoCodes, markPromoAsUsed } = require("../controllers/promoController");
 
 const router = express.Router();
 
 router.get("/", listActivePromoCodes);
-router.post("/validate", validatePromo);
+router.post("/validate", protect, validatePromo);
+router.post("/mark-used", protect, markPromoAsUsed);
 
 module.exports = router;

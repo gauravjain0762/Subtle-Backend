@@ -1,6 +1,7 @@
 const PromoCode = require("../models/PromoCode");
+const Order = require("../models/Order");
 
-const validatePromoCode = async (code, workspaceCode) => {
+const validatePromoCode = async (code, workspaceCode, userId = null) => {
   if (!code) {
     return { valid: false, error: "Invalid or expired promo code" };
   }
@@ -12,13 +13,33 @@ const validatePromoCode = async (code, workspaceCode) => {
   }
 
   if (promo.expiresAt && promo.expiresAt < new Date()) {
-    return { valid: false, error: "Invalid or expired promo code" };
+    return { valid: false, error: "Promo code has expired" };
   }
 
   if (promo.workspaceCodes.length > 0) {
     const normalizedWorkspace = (workspaceCode || "").trim().toUpperCase();
     if (!promo.workspaceCodes.includes(normalizedWorkspace)) {
       return { valid: false, error: "Invalid or expired promo code" };
+    }
+  }
+
+  // Check one-time use
+  if (promo.oneTimeUse && userId) {
+    if (promo.usedBy.includes(userId)) {
+      return { valid: false, error: "You have already used this promo code" };
+    }
+  }
+
+  // Check max uses limit
+  if (promo.maxUses && promo.usageCount >= promo.maxUses) {
+    return { valid: false, error: "Promo code usage limit reached" };
+  }
+
+  // Check first-time user only
+  if (promo.firstTimeUserOnly && userId) {
+    const userOrders = await Order.countDocuments({ user: userId });
+    if (userOrders > 0) {
+      return { valid: false, error: "This promo code is for first-time users only" };
     }
   }
 
