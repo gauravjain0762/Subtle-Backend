@@ -114,6 +114,64 @@ exports.updateDish = catchAsync(async (req, res) => {
   res.status(200).json({ success: true, dish });
 });
 
+// Check if dish is in use before deletion
+exports.checkDishUsage = catchAsync(async (req, res) => {
+  const { dishId } = req.params;
+  const Order = require("../models/Order");
+  const Subscription = require("../models/Subscription");
+
+  // Verify dish exists
+  const dish = await Dish.findById(dishId);
+  if (!dish) {
+    throw new AppError("Dish not found", 404);
+  }
+
+  // Check orders containing this dish
+  const ordersWithDish = await Order.countDocuments({
+    "items.dishId": dishId,
+  });
+
+  // Check subscriptions using this meal
+  const subscriptionsWithDish = await Subscription.countDocuments({
+    meal: dishId,
+    status: "active",
+  });
+
+  // Get unique affected customers
+  const affectedOrders = await Order.find(
+    { "items.dishId": dishId },
+    { user: 1 }
+  );
+  const affectedSubscriptions = await Subscription.find(
+    { meal: dishId, status: "active" },
+    { user: 1 }
+  );
+
+  const affectedUsers = new Set();
+  affectedOrders.forEach((o) => affectedUsers.add(o.user.toString()));
+  affectedSubscriptions.forEach((s) => affectedUsers.add(s.user.toString()));
+  const affectedCustomers = affectedUsers.size;
+
+  const isInUse = ordersWithDish > 0 || subscriptionsWithDish > 0;
+
+  const message = isInUse
+    ? `This dish is being used by ${affectedCustomers} customer${affectedCustomers !== 1 ? "s" : ""}. Deleting it will affect ${ordersWithDish} order${ordersWithDish !== 1 ? "s" : ""} and ${subscriptionsWithDish} subscription${subscriptionsWithDish !== 1 ? "s" : ""}.`
+    : null;
+
+  console.log(`🔍 Usage check for dish ${dishId}: ${isInUse ? "IN USE" : "NOT IN USE"}`);
+
+  res.status(200).json({
+    success: true,
+    isInUse,
+    usage: {
+      activeOrders: ordersWithDish,
+      activeSubscriptions: subscriptionsWithDish,
+      affectedCustomers,
+    },
+    message,
+  });
+});
+
 exports.deleteDish = catchAsync(async (req, res) => {
   const dish = await Dish.findByIdAndDelete(req.params.id);
 
@@ -121,5 +179,7 @@ exports.deleteDish = catchAsync(async (req, res) => {
     throw new AppError("Dish not found", 404);
   }
 
-  res.status(200).json({ success: true, message: "Dish deleted" });
+  console.log(`🗑️ Dish deleted: ${dish.name} (${dish._id})`);
+
+  res.status(200).json({ success: true, message: "Dish deleted successfully" });
 });
