@@ -28,6 +28,7 @@ const {
   updateDish,
   setDishAvailability,
   deleteDish,
+  checkDishUsage,
 } = require("../controllers/adminDishController");
 const {
   createPromoCode,
@@ -89,6 +90,7 @@ router.patch("/orders/:id/status", updateOrderStatus);
 router.post("/dishes", upload.array("images", 5), createDish);
 router.get("/dishes", listDishes);
 router.get("/dishes/:id", getDish);
+router.get("/dishes/:dishId/usage-check", checkDishUsage);
 router.patch("/dishes/:id", upload.array("images", 5), updateDish);
 router.patch("/dishes/:id/availability", setDishAvailability);
 router.delete("/dishes/:id", deleteDish);
