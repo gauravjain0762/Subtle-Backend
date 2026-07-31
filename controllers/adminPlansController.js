@@ -107,3 +107,82 @@ exports.deletePlan = catchAsync(async (req, res) => {
 
   res.status(200).json({ success: true, message: "Plan deactivated" });
 });
+
+// Get subscribers of a specific plan
+exports.getPlanSubscribers = catchAsync(async (req, res) => {
+  const { planId } = req.params;
+  const { page = 1, limit = 20, status = null } = req.query;
+
+  // Verify plan exists
+  const plan = await Plan.findById(planId);
+  if (!plan) {
+    throw new AppError("Plan not found", 404);
+  }
+
+  // Build filter
+  const filter = { plan: planId };
+  if (status) {
+    filter.status = status; // "active" or "paused"
+  }
+
+  // Get paginated subscribers
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const [subscribers, total] = await Promise.all([
+    Subscription.find(filter)
+      .populate({
+        path: "user",
+        select: "email firstName lastName phone workspaceName",
+      })
+      .populate({
+        path: "meal",
+        select: "name price",
+      })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit)),
+    Subscription.countDocuments(filter),
+  ]);
+
+  // Format response
+  const formattedSubscribers = subscribers.map((sub) => ({
+    _id: sub._id,
+    user: {
+      _id: sub.user._id,
+      email: sub.user.email,
+      name: `${sub.user.firstName} ${sub.user.lastName}`,
+      phone: sub.user.phone,
+      workspace: sub.user.workspaceName,
+    },
+    meal: {
+      _id: sub.meal._id,
+      name: sub.meal.name,
+      price: sub.meal.price,
+    },
+    quantity: sub.quantity,
+    pattern: sub.pattern,
+    status: sub.status,
+    startDate: sub.startDate,
+    nextChargeDate: sub.nextChargeDate,
+    totalCharges: sub.totalCharges,
+    createdAt: sub.createdAt,
+  }));
+
+  console.log(`📊 Retrieved ${formattedSubscribers.length} subscribers for plan ${planId}`);
+
+  res.status(200).json({
+    success: true,
+    plan: {
+      _id: plan._id,
+      name: plan.name,
+      type: plan.type,
+    },
+    subscribers: formattedSubscribers,
+    pagination: {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total,
+      pages: Math.ceil(total / parseInt(limit)),
+      hasMore: skip + parseInt(limit) < total,
+    },
+  });
+});
