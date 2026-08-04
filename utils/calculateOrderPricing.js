@@ -10,9 +10,7 @@ const isPastCutoff = (deliveryDate) => {
   return new Date() > cutoff;
 };
 
-const Dish = require("../models/Dish");
-
-const calculateOrderPricing = async ({ workspaceCode, deliveryDate, items, promoCode, planType }) => {
+const calculateOrderPricing = async ({ workspaceCode, deliveryDate, items, promoCode }) => {
   if (isPastCutoff(deliveryDate)) {
     throw new AppError("Order cutoff passed. Please order before 10:00 PM the night before.", 400);
   }
@@ -22,17 +20,9 @@ const calculateOrderPricing = async ({ workspaceCode, deliveryDate, items, promo
     throw new AppError("Kitchen is closed on the selected delivery date", 400);
   }
 
-  let availableDishes;
-
-  // For one-time orders: allow any available dish
-  // For subscription orders: restrict to published menu for that day
-  if (planType === "one-time") {
-    availableDishes = await Dish.find({ available: true });
-  } else {
-    availableDishes = await getStandardDishesForDay(weekdayCode);
-    if (availableDishes.length === 0) {
-      throw new AppError("Menu not available for the selected delivery date", 400);
-    }
+  const availableDishes = await getStandardDishesForDay(weekdayCode);
+  if (availableDishes.length === 0) {
+    throw new AppError("Menu not available for the selected delivery date", 400);
   }
 
   let subtotal = 0;

@@ -1,12 +1,32 @@
 const Cart = require("../models/Cart");
+const Dish = require("../models/Dish");
 const AppError = require("../utils/appError");
 const catchAsync = require("../utils/catchAsync");
+const { getWeekdayCode } = require("../utils/standardMenu");
 
 exports.saveCart = catchAsync(async (req, res) => {
   const { workspaceCode, deliveryDate, lunchTime, isWeeklySubscription, items } = req.body || {};
 
   if (!Array.isArray(items)) {
     throw new AppError("items must be an array", 400);
+  }
+
+  // Validate that all dishes are available for the selected delivery date
+  const weekdayCode = getWeekdayCode(deliveryDate);
+
+  for (const item of items) {
+    const dish = await Dish.findById(item.dishId);
+    if (!dish) {
+      throw new AppError(`Dish not found: ${item.dishId}`, 404);
+    }
+
+    if (!dish.available) {
+      throw new AppError(`${dish.name} is not available`, 400);
+    }
+
+    if (!dish.availableDays || !dish.availableDays.includes(weekdayCode)) {
+      throw new AppError(`${dish.name} is not available on ${weekdayCode}`, 400);
+    }
   }
 
   let cart = await Cart.findOne({ user: req.user._id });
