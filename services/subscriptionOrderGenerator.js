@@ -150,6 +150,7 @@ const generateSubscriptionOrders = async () => {
               orderRef,
               orderNumber,
               user: subscription.user._id || subscription.user,
+              subscription: subscription._id,
               workspace: workspaceId,
               workspaceCode: workspaceCode,
               workspaceName: workspaceName,

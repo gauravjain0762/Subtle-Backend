@@ -19,6 +19,7 @@ const {
   getOrder,
   updateOrderStatus,
   bulkUpdateStatus,
+  getGroupedSubscriptionOrders,
 } = require("../controllers/adminOrderController");
 const { publishMenu, assignDishesToDay, deleteMenu } = require("../controllers/adminMenuController");
 const {
@@ -82,6 +83,7 @@ router.get("/workspaces", listWorkspaces);
 router.patch("/workspaces/:id", updateWorkspaceStatus);
 router.delete("/workspaces/:id", deleteWorkspace);
 
+router.get("/orders/grouped/subscriptions", getGroupedSubscriptionOrders);
 router.get("/orders", listOrders);
 router.get("/orders/:id", getOrder);
 router.patch("/orders/bulk-status", bulkUpdateStatus);

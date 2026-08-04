@@ -37,6 +37,7 @@ const orderSchema = new mongoose.Schema(
     orderRef: { type: String, required: true, unique: true },
     orderNumber: { type: String, unique: true, sparse: true },
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    subscription: { type: mongoose.Schema.Types.ObjectId, ref: "Subscription" },
     workspace: { type: mongoose.Schema.Types.ObjectId, ref: "Workspace", required: true },
     workspaceCode: { type: String, required: true, uppercase: true, trim: true },
     workspaceName: { type: String, trim: true },

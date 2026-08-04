@@ -159,3 +159,77 @@ exports.bulkUpdateStatus = catchAsync(async (req, res) => {
 
   res.status(200).json({ success: true, updatedCount: result.modifiedCount });
 });
+
+// Get grouped subscription orders (one entry per subscription with all delivery dates)
+exports.getGroupedSubscriptionOrders = catchAsync(async (req, res) => {
+  const { status, workspaceId, customerId, dayFilter, startDate, endDate, search } = req.query;
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+  const limit = Math.max(parseInt(req.query.limit, 10) || 10, 1);
+
+  const filter = {
+    subscription: { $exists: true, $ne: null },
+  };
+
+  if (status) filter.status = status;
+  if (workspaceId) filter.workspace = workspaceId;
+  if (customerId) filter.user = customerId;
+
+  const deliveryDateFilter = buildDeliveryDateFilter(dayFilter, startDate, endDate);
+  if (deliveryDateFilter) filter.deliveryDate = deliveryDateFilter;
+
+  if (search) {
+    const regex = new RegExp(search, "i");
+    const matchingUsers = await User.find({ $or: [{ firstName: regex }, { lastName: regex }] }).select("_id");
+    filter.$or = [{ workspaceCode: regex }, { user: { $in: matchingUsers.map((u) => u._id) } }];
+  }
+
+  // Get all matching orders
+  const allOrders = await Order.find(filter)
+    .populate("user", "firstName lastName email")
+    .populate("workspace", "code name")
+    .populate("subscription")
+    .sort({ createdAt: -1 });
+
+  // Group by subscription
+  const groupedMap = new Map();
+  allOrders.forEach((order) => {
+    const subId = order.subscription._id.toString();
+    if (!groupedMap.has(subId)) {
+      groupedMap.set(subId, {
+        subscriptionId: order.subscription._id,
+        orderNumber: order.orderNumber,
+        customerName: order.user ? `${order.user.firstName || ""} ${order.user.lastName || ""}`.trim() || order.user.email : undefined,
+        customerId: order.user._id,
+        workspaceId: order.workspace._id,
+        workspaceCode: order.workspaceCode,
+        workspaceName: order.workspace.name,
+        items: order.items,
+        totalAmount: order.total,
+        status: order.status,
+        planType: order.planType,
+        paymentMethod: order.paymentMethod,
+        createdAt: order.createdAt,
+        deliveryDates: [],
+      });
+    }
+    groupedMap.get(subId).deliveryDates.push({
+      date: order.deliveryDate,
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+    });
+  });
+
+  // Convert to array and paginate
+  const grouped = Array.from(groupedMap.values());
+  const total = grouped.length;
+  const start = (page - 1) * limit;
+  const paginatedGrouped = grouped.slice(start, start + limit);
+
+  res.status(200).json({
+    success: true,
+    orders: paginatedGrouped,
+    total,
+    page,
+    totalPages: Math.max(Math.ceil(total / limit), 1),
+  });
+});
