@@ -16,6 +16,9 @@ const subscriptionSchema = new mongoose.Schema(
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, unique: true },
     plan: { type: mongoose.Schema.Types.ObjectId, ref: "Plan", required: true },
     meal: { type: mongoose.Schema.Types.ObjectId, ref: "Dish", required: true },
+    workspace: { type: mongoose.Schema.Types.ObjectId, ref: "Workspace" },
+    workspaceCode: { type: String, uppercase: true, trim: true },
+    workspaceName: { type: String, trim: true },
     mealPrice: { type: Number, required: true },
     quantity: { type: Number, required: true, min: 1, max: 100 },
     pattern: { type: [String], required: true }, // e.g., ["Mon", "Tue", "Wed", "Thu", "Fri"]
@@ -26,6 +29,7 @@ const subscriptionSchema = new mongoose.Schema(
     stripeCustomerId: { type: String },
     totalCharges: { type: Number, default: 0 },
     billingHistory: { type: [billingHistorySchema], default: [] },
+    lastOrderGenerationDate: { type: Date },
   },
   { timestamps: true }
 );

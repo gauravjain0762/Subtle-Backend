@@ -273,11 +273,31 @@ exports.verifyCheckoutSession = catchAsync(async (req, res) => {
   const nextChargeDate = new Date(start);
   nextChargeDate.setDate(nextChargeDate.getDate() + 7);
 
+  // Get workspace info from user
+  const Workspace = require("../models/Workspace");
+  const User = require("../models/User");
+  const user = await User.findById(userId);
+
+  let workspace = null;
+  let workspaceCode = null;
+  let workspaceName = null;
+
+  if (user && user.workspaceCode) {
+    workspace = await Workspace.findOne({ code: user.workspaceCode.toUpperCase() });
+    if (workspace) {
+      workspaceCode = workspace.code;
+      workspaceName = workspace.name;
+    }
+  }
+
   // Create subscription
   const subscription = await Subscription.create({
     user: userId,
     plan: planId,
     meal: mealId,
+    workspace: workspace ? workspace._id : null,
+    workspaceCode: workspaceCode || (user ? user.workspaceCode : null),
+    workspaceName: workspaceName,
     mealPrice: parseFloat(mealPrice),
     quantity: parseInt(quantity),
     pattern,
