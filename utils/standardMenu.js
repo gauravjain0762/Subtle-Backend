@@ -12,7 +12,6 @@ const getStandardDishesForDay = (weekdayCode) =>
   Dish.find({
     available: true,
     availableDays: weekdayCode,
-    $or: [{ menuId: "standard" }, { menuId: { $exists: false } }, { menuId: null }, { menuId: "" }],
   });
 
 const toDateStr = (date) => {
