@@ -54,6 +54,7 @@ exports.createOrder = catchAsync(async (req, res) => {
     deliveryDate,
     items,
     promoCode,
+    planType,
   });
 
   if (paymentMethod && !["card", "apple_pay", "google_pay", "subscription"].includes(paymentMethod)) {
