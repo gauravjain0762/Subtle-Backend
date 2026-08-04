@@ -317,6 +317,18 @@ exports.verifyCheckoutSession = catchAsync(async (req, res) => {
 
   console.log(`✅ Subscription created after checkout: ${subscription._id}`);
 
+  // Immediately generate orders for the new subscription (don't wait for cron)
+  try {
+    const { generateSubscriptionOrders } = require("../services/subscriptionOrderGenerator");
+    console.log(`🚀 Generating orders for new subscription ${subscription._id}...`);
+    const result = await generateSubscriptionOrders();
+    console.log(`✅ Immediate order generation: ${result.generated} orders created`);
+  } catch (error) {
+    console.error(`⚠️ Failed to generate orders immediately: ${error.message}`);
+    // Don't fail the subscription creation if order generation fails
+    // The cron job will catch it later
+  }
+
   res.status(201).json({
     success: true,
     message: "Payment successful! Subscription created.",
