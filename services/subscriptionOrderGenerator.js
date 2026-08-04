@@ -112,9 +112,11 @@ const generateSubscriptionOrders = async () => {
         const deliveryDates = getDeliveryDates(subscription, 28);
 
         // Filter out dates that already have orders
+        // Check for existing subscription orders by user + meal + deliveryDate
         const existingOrders = await Order.find({
-          user: subscription.user,
-          plan: subscription.plan._id,
+          user: subscription.user._id || subscription.user,
+          "items.dishId": subscription.meal._id,
+          paymentMethod: "subscription",
           deliveryDate: { $in: deliveryDates },
         }).select("deliveryDate");
 
