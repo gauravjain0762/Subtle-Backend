@@ -1,6 +1,6 @@
 const AppError = require("./appError");
 const validatePromoCode = require("./validatePromoCode");
-const { getWeekdayCode, getStandardDishesForDay } = require("./standardMenu");
+const { getWeekdayCode, getAvailableDishesForDay } = require("./standardMenu");
 
 const CUTOFF_HOUR = 22;
 
@@ -20,7 +20,7 @@ const calculateOrderPricing = async ({ workspaceCode, deliveryDate, items, promo
     throw new AppError("Kitchen is closed on the selected delivery date", 400);
   }
 
-  const availableDishes = await getStandardDishesForDay(weekdayCode);
+  const availableDishes = await getAvailableDishesForDay(weekdayCode);
   if (availableDishes.length === 0) {
     throw new AppError("Menu not available for the selected delivery date", 400);
   }

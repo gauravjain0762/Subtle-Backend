@@ -12,6 +12,14 @@ const getStandardDishesForDay = (weekdayCode) =>
   Dish.find({
     available: true,
     availableDays: weekdayCode,
+    $or: [{ menuId: "standard" }, { menuId: { $exists: false } }, { menuId: null }, { menuId: "" }],
+  });
+
+// Get all available dishes for a day (includes all menus - for order validation)
+const getAvailableDishesForDay = (weekdayCode) =>
+  Dish.find({
+    available: true,
+    availableDays: weekdayCode,
   });
 
 const toDateStr = (date) => {
@@ -36,4 +44,4 @@ const getCurrentWeekMonToFri = () => {
   });
 };
 
-module.exports = { getWeekdayCode, getStandardDishesForDay, getCurrentWeekMonToFri, toDateStr };
+module.exports = { getWeekdayCode, getStandardDishesForDay, getAvailableDishesForDay, getCurrentWeekMonToFri, toDateStr };
