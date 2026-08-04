@@ -60,7 +60,7 @@ const toAdminOrderJSON = (order) => {
     items: order.items.map(toAdminOrderItem),
     totalAmount: order.total,
     status: order.status,
-    subscriptionType: order.isWeeklySubscription ? "weekly" : "one-off",
+    planType: order.planType,
     paymentMethod: order.paymentMethod,
     orderDate: order.createdAt,
     deliveryDate: order.deliveryDate,
@@ -78,7 +78,7 @@ exports.listOrders = catchAsync(async (req, res) => {
   const filter = {};
 
   if (status) filter.status = status;
-  if (type) filter.isWeeklySubscription = type === "weekly";
+  if (type) filter.planType = type;
   if (workspaceId) filter.workspace = workspaceId;
   if (customerId) filter.user = customerId;
 
