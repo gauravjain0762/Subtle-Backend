@@ -68,7 +68,9 @@ const generateSubscriptionOrders = async () => {
     // Find all active subscriptions
     const subscriptions = await Subscription.find({ status: "active" })
       .populate("plan")
-      .populate("meal");
+      .populate("meal")
+      .populate("user", "workspaceCode")
+      .populate("workspace");
 
     console.log(`📦 Found ${subscriptions.length} active subscriptions`);
 
@@ -77,6 +79,35 @@ const generateSubscriptionOrders = async () => {
 
     for (const subscription of subscriptions) {
       try {
+        // Check if plan exists (might be deleted)
+        if (!subscription.plan) {
+          console.log(`⚠️ Sub ${subscription._id}: Plan not found, skipping`);
+          errorCount++;
+          continue;
+        }
+
+        // Get workspace info if not already set
+        let workspaceId = subscription.workspace;
+        let workspaceCode = subscription.workspaceCode;
+        let workspaceName = subscription.workspaceName;
+
+        if (!workspaceCode && subscription.user && subscription.user.workspaceCode) {
+          const Workspace = require("../models/Workspace");
+          const workspace = await Workspace.findOne({ code: subscription.user.workspaceCode.toUpperCase() });
+          if (workspace) {
+            workspaceId = workspace._id;
+            workspaceCode = workspace.code;
+            workspaceName = workspace.name;
+          }
+        }
+
+        // Skip if no workspace info found
+        if (!workspaceCode || !workspaceId) {
+          console.log(`⚠️ Sub ${subscription._id}: No workspace info, skipping`);
+          errorCount++;
+          continue;
+        }
+
         // Get upcoming delivery dates
         const deliveryDates = getDeliveryDates(subscription, 28);
 
@@ -116,10 +147,10 @@ const generateSubscriptionOrders = async () => {
             const order = await Order.create({
               orderRef,
               orderNumber,
-              user: subscription.user,
-              workspace: subscription.workspace || subscription.user.workspaceId,
-              workspaceCode: subscription.workspaceCode,
-              workspaceName: subscription.workspaceName,
+              user: subscription.user._id || subscription.user,
+              workspace: workspaceId,
+              workspaceCode: workspaceCode,
+              workspaceName: workspaceName,
               deliveryDate,
               lunchTime: "12:00 PM",
               items: [
