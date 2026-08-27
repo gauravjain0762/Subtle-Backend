@@ -487,6 +487,28 @@ exports.cancelSubscription = catchAsync(async (req, res) => {
 
   console.log(`🔴 Subscription cancelled: ${subscription._id} by user ${userId}`);
 
+  // Cancel all associated orders that haven't been delivered
+  let cancelledOrdersCount = 0;
+  try {
+    const Order = require("../models/Order");
+    const cancelResult = await Order.updateMany(
+      {
+        subscription: subscription._id,
+        status: { $in: ["new", "scheduled"] }, // Only cancel new/scheduled orders
+      },
+      {
+        status: "cancelled",
+        updatedAt: new Date(),
+      }
+    );
+
+    cancelledOrdersCount = cancelResult.modifiedCount;
+    console.log(`🔴 Cancelled ${cancelledOrdersCount} associated orders for subscription ${subscription._id}`);
+  } catch (error) {
+    console.error(`⚠️ Failed to cancel associated orders: ${error.message}`);
+    // Don't fail the subscription cancellation if order cancellation fails
+  }
+
   // Send admin notification
   let adminNotificationSent = false;
   let adminNotificationError = null;
@@ -542,11 +564,12 @@ exports.cancelSubscription = catchAsync(async (req, res) => {
           </div>
 
           <div style="background: #fff3e0; padding: 15px; border-radius: 4px; margin: 15px 0;">
-            <p><strong>ACTION REQUIRED:</strong></p>
+            <p><strong>⚠️ ACTION REQUIRED:</strong></p>
             <ul>
+              <li><strong>${cancelledOrdersCount} orders marked as CANCELLED</strong> in the system</li>
+              <li>All scheduled deliveries for this subscription have been cancelled</li>
               <li>Cancel or refund any scheduled payments if applicable</li>
-              <li>Note: All future orders have been cancelled</li>
-              <li>Consider reaching out to the customer to understand cancellation reason</li>
+              <li>Consider reaching out to the customer to understand cancellation reason and offer retention options</li>
             </ul>
           </div>
 
@@ -573,12 +596,13 @@ exports.cancelSubscription = catchAsync(async (req, res) => {
 
   res.status(200).json({
     success: true,
-    message: "Subscription cancelled successfully",
+    message: `Subscription cancelled successfully. ${cancelledOrdersCount} associated orders marked as cancelled.`,
     subscription: {
       _id: subscription._id,
       status: subscription.status,
       cancelledDate: subscription.cancelledDate,
     },
+    ordersCancelled: cancelledOrdersCount,
     adminNotification: {
       sent: adminNotificationSent,
       error: adminNotificationError,
