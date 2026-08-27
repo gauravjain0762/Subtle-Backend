@@ -488,6 +488,9 @@ exports.cancelSubscription = catchAsync(async (req, res) => {
   console.log(`🔴 Subscription cancelled: ${subscription._id} by user ${userId}`);
 
   // Send admin notification
+  let adminNotificationSent = false;
+  let adminNotificationError = null;
+
   try {
     const nodemailer = require("nodemailer");
     const transporter = nodemailer.createTransport({
@@ -499,25 +502,72 @@ exports.cancelSubscription = catchAsync(async (req, res) => {
     });
 
     const adminEmail = process.env.ADMIN_NOTIFY_EMAIL;
-    const userName = `${subscription.user.firstName || ""} ${subscription.user.lastName || ""}`.trim() || subscription.user.email;
+    if (!adminEmail) {
+      console.warn(`⚠️ ADMIN_NOTIFY_EMAIL not configured in environment variables`);
+      adminNotificationError = "Admin email not configured";
+    } else {
+      const userName = `${subscription.user.firstName || ""} ${subscription.user.lastName || ""}`.trim() || subscription.user.email;
+      const totalSpent = subscription.billingHistory?.reduce((sum, bill) => sum + (bill.amount || 0), 0) || 0;
+      const itemsCount = subscription.items?.length || 0;
 
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: adminEmail,
-      subject: `⚠️ Subscription Cancelled - ${userName}`,
-      html: `
-        <h2>Subscription Cancelled</h2>
-        <p><strong>User:</strong> ${userName}</p>
-        <p><strong>Email:</strong> ${subscription.user.email}</p>
-        <p><strong>Plan:</strong> ${subscription.plan.name}</p>
-        <p><strong>Cancelled Date:</strong> ${new Date().toLocaleString()}</p>
-        <p><strong>Reason:</strong> User initiated cancellation</p>
-      `,
-    });
+      const emailHTML = `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+          <div style="border-left: 4px solid #d32f2f; padding-left: 15px; margin-bottom: 20px;">
+            <h2 style="margin: 0; color: #d32f2f;">🔴 Subscription Cancelled</h2>
+            <p style="margin: 5px 0; font-size: 14px; color: #666;">User initiated cancellation</p>
+          </div>
 
-    console.log(`✅ Admin notification sent to ${adminEmail}`);
+          <div style="border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; background: #f5f5f5;">
+            <h3>CUSTOMER DETAILS</h3>
+            <p><strong>Name:</strong> ${userName}</p>
+            <p><strong>Email:</strong> ${subscription.user.email}</p>
+            <p><strong>User ID:</strong> ${subscription.user._id}</p>
+          </div>
+
+          <div style="border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; background: #f5f5f5;">
+            <h3>SUBSCRIPTION DETAILS</h3>
+            <p><strong>Plan:</strong> ${subscription.plan.name}</p>
+            <p><strong>Plan Type:</strong> ${subscription.plan.type === "weekly" ? "Weekly" : "One-Off"}</p>
+            <p><strong>Subscription ID:</strong> ${subscription._id}</p>
+            <p><strong>Start Date:</strong> ${new Date(subscription.startDate).toLocaleDateString()}</p>
+            <p><strong>Cancelled Date:</strong> ${new Date().toLocaleString()}</p>
+            <p><strong>Subscription Duration:</strong> ${Math.floor((new Date() - new Date(subscription.startDate)) / (1000 * 60 * 60 * 24))} days</p>
+          </div>
+
+          <div style="border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; background: #f5f5f5;">
+            <h3>BILLING SUMMARY</h3>
+            <p><strong>Total Payments:</strong> ${subscription.billingHistory?.length || 0}</p>
+            <p><strong>Total Amount Received:</strong> £${totalSpent.toFixed(2)}</p>
+            <p><strong>Meals Ordered:</strong> ${itemsCount}</p>
+          </div>
+
+          <div style="background: #fff3e0; padding: 15px; border-radius: 4px; margin: 15px 0;">
+            <p><strong>ACTION REQUIRED:</strong></p>
+            <ul>
+              <li>Cancel or refund any scheduled payments if applicable</li>
+              <li>Note: All future orders have been cancelled</li>
+              <li>Consider reaching out to the customer to understand cancellation reason</li>
+            </ul>
+          </div>
+
+          <p style="color: #666; font-size: 12px; margin-top: 20px;">This is an automated notification from Subtle Kitchen admin system.</p>
+        </div>
+      `;
+
+      console.log(`📧 Sending admin notification to ${adminEmail}...`);
+      const info = await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: adminEmail,
+        subject: `🔴 ALERT: Subscription Cancelled - ${userName}`,
+        html: emailHTML,
+      });
+
+      console.log(`✅ Admin notification sent successfully. Message ID: ${info.messageId}`);
+      adminNotificationSent = true;
+    }
   } catch (error) {
-    console.error(`⚠️ Failed to send admin notification: ${error.message}`);
+    console.error(`❌ Failed to send admin notification: ${error.message}`);
+    adminNotificationError = error.message;
     // Don't fail the cancellation if email fails
   }
 
@@ -528,6 +578,10 @@ exports.cancelSubscription = catchAsync(async (req, res) => {
       _id: subscription._id,
       status: subscription.status,
       cancelledDate: subscription.cancelledDate,
+    },
+    adminNotification: {
+      sent: adminNotificationSent,
+      error: adminNotificationError,
     },
   });
 });
