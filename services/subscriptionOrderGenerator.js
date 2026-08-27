@@ -108,29 +108,56 @@ const generateSubscriptionOrders = async () => {
           continue;
         }
 
-        // Get upcoming delivery dates
-        const deliveryDates = getDeliveryDates(subscription, 28);
+        // Get pattern-based delivery dates (one per day in pattern for 4 weeks)
+        const pattern = subscription.pattern || [];
+        const items = subscription.items || [];
+        const startDate = new Date(subscription.startDate);
+        const deliveryDates = [];
+
+        const dayIndices = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+
+        // Generate dates for 28 days
+        for (let week = 0; week < 4; week++) {
+          for (let dayIdx = 0; dayIdx < pattern.length; dayIdx++) {
+            const dayName = pattern[dayIdx];
+            const dayOfWeekIndex = dayIndices[dayName];
+
+            if (dayOfWeekIndex === undefined) continue;
+
+            const orderDate = new Date(startDate);
+            orderDate.setDate(startDate.getDate() + week * 7 + dayOfWeekIndex);
+
+            deliveryDates.push({
+              date: orderDate.toISOString().split('T')[0],
+              dayName: dayName,
+              itemIndex: dayIdx,
+            });
+          }
+        }
+
+        console.log(`📅 Generated ${deliveryDates.length} potential delivery dates`);
 
         // Filter out dates that already have orders
-        // Check for existing subscription orders by user + meal + deliveryDate
         const existingOrders = await Order.find({
           user: subscription.user._id || subscription.user,
-          "items.dishId": subscription.meal._id,
+          subscription: subscription._id,
           paymentMethod: "subscription",
-          deliveryDate: { $in: deliveryDates },
+          deliveryDate: { $in: deliveryDates.map((d) => d.date) },
         }).select("deliveryDate");
 
         const existingDates = new Set(existingOrders.map((o) => o.deliveryDate));
-        const newDates = deliveryDates.filter((d) => !existingDates.has(d));
+        const newDates = deliveryDates.filter((d) => !existingDates.has(d.date));
 
-        // Skip if no new dates to generate
         if (newDates.length === 0) {
           console.log(`✓ Sub ${subscription._id}: No new dates to generate`);
           continue;
         }
 
         // Create orders for new delivery dates
-        for (const deliveryDate of newDates) {
+        for (const dateInfo of newDates) {
+          const deliveryDate = dateInfo.date;
+          const itemIndex = dateInfo.itemIndex;
+
           // Skip past cutoff dates
           if (isPastCutoff(deliveryDate)) {
             console.log(`⏸️ Sub ${subscription._id}: Skipping ${deliveryDate} (past cutoff)`);
@@ -138,13 +165,28 @@ const generateSubscriptionOrders = async () => {
           }
 
           try {
+            const item = items[itemIndex];
+            if (!item) {
+              console.warn(`⚠️ No item found for index ${itemIndex}`);
+              errorCount++;
+              continue;
+            }
+
             const dateStr = deliveryDate.replace(/-/g, "");
             const orderRef = await generateDailyRef(Order, "orderRef", "SK", dateStr);
             const orderNumber = `ORD-${await getNextSequence("orderNumber")}`;
 
-            // Calculate meal price with quantity
-            const mealPrice = subscription.mealPrice || subscription.meal.price;
-            const totalPrice = Number(mealPrice) * subscription.quantity;
+            const totalPrice = Number(item.mealPrice) * item.quantity;
+
+            // Fetch meal details
+            const Dish = require("../models/Dish");
+            const dish = await Dish.findById(item.mealId);
+
+            if (!dish) {
+              console.warn(`⚠️ Dish not found: ${item.mealId}`);
+              errorCount++;
+              continue;
+            }
 
             const order = await Order.create({
               orderRef,
@@ -158,13 +200,13 @@ const generateSubscriptionOrders = async () => {
               lunchTime: "12:00 PM",
               items: [
                 {
-                  dishId: subscription.meal._id,
-                  dishName: subscription.meal.name,
+                  dishId: dish._id,
+                  dishName: dish.name,
                   portionSize: "Regular",
-                  qty: subscription.quantity,
+                  qty: item.quantity,
                   addons: [],
-                  unitPrice: mealPrice,
-                  images: subscription.meal.images || [],
+                  unitPrice: item.mealPrice,
+                  images: dish.images || [],
                 },
               ],
               subtotal: totalPrice,
@@ -176,7 +218,7 @@ const generateSubscriptionOrders = async () => {
             });
 
             generatedCount++;
-            console.log(`✅ Created order ${orderNumber} for ${deliveryDate}`);
+            console.log(`✅ Created order ${orderNumber} for ${deliveryDate} (${dateInfo.dayName}): ${dish.name}`);
           } catch (error) {
             errorCount++;
             console.error(`❌ Failed to create order for ${deliveryDate}:`, error.message);
