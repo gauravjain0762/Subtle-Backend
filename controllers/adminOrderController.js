@@ -141,7 +141,7 @@ exports.updateOrderStatus = catchAsync(async (req, res) => {
 });
 
 exports.bulkUpdateStatus = catchAsync(async (req, res) => {
-  const { orderIds, status } = req.body || {};
+  const { orderIds, status, sendNotification = false } = req.body || {};
 
   if (!Array.isArray(orderIds) || orderIds.length === 0) {
     throw new AppError("orderIds must be a non-empty array", 400);
@@ -155,9 +155,117 @@ exports.bulkUpdateStatus = catchAsync(async (req, res) => {
     throw new AppError(`Invalid order id(s): ${invalidIds.join(", ")}`, 400);
   }
 
-  const result = await Order.updateMany({ _id: { $in: orderIds } }, { status });
+  // Update orders
+  console.log(`📦 Updating ${orderIds.length} orders to status: ${status}`);
+  const result = await Order.updateMany({ _id: { $in: orderIds } }, { status, updatedAt: new Date() });
 
-  res.status(200).json({ success: true, updatedCount: result.modifiedCount });
+  // Fetch updated orders with customer details
+  const updatedOrders = await Order.find({ _id: { $in: orderIds } })
+    .populate("user", "email firstName lastName")
+    .populate("subscription");
+
+  const emailsSent = [];
+  const failedEmails = [];
+
+  // Send emails if requested
+  if (sendNotification && status === "delivered") {
+    console.log(`📧 Sending delivery notifications to ${updatedOrders.length} customers...`);
+
+    try {
+      const nodemailer = require("nodemailer");
+      const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+
+      for (const order of updatedOrders) {
+        try {
+          if (!order.user || !order.user.email) {
+            console.warn(`⚠️ Order ${order.orderNumber} - no customer email found`);
+            failedEmails.push({
+              orderId: order.orderNumber,
+              reason: "No customer email found",
+            });
+            continue;
+          }
+
+          const customerName = `${order.user.firstName || ""} ${order.user.lastName || ""}`.trim() || order.user.email;
+          const itemsList = order.items
+            .map((item) => `  • ${item.dishName}\n    Quantity: ${item.qty}\n    Portion: ${item.portionSize || "Regular"}\n    Add-ons: ${item.addons?.length > 0 ? item.addons.map((a) => a.name).join(", ") : "None"}`)
+            .join("\n\n");
+
+          const emailHTML = `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+              <h2>Your Order Has Been Delivered 🎉</h2>
+
+              <p>Hi ${customerName},</p>
+
+              <p>Great news! Your order has been delivered.</p>
+
+              <div style="border: 1px solid #ddd; padding: 15px; margin: 20px 0; background: #f9f9f9;">
+                <h3 style="margin-top: 0;">ORDER DETAILS</h3>
+
+                <p><strong>Order ID:</strong> ${order.orderNumber}</p>
+                <p><strong>Delivery Date:</strong> ${new Date(order.deliveryDate).toLocaleDateString()}</p>
+                <p><strong>Subscription:</strong> ${order.planType === "weekly" ? "Weekly Plan" : "One-Off Plan"}</p>
+
+                <h3>Items Ordered:</h3>
+                <pre style="white-space: pre-wrap; font-family: Arial; background: white; padding: 10px;">${itemsList}</pre>
+
+                <p><strong>Total Amount:</strong> £${order.total.toFixed(2)}</p>
+                <p><strong>Payment Method:</strong> ${order.paymentMethod === "subscription" ? "Subscription" : "Card"}</p>
+              </div>
+
+              <p>Thank you for your order! We hope you enjoyed your meal.</p>
+
+              <p>If you have any questions or concerns, please contact us.</p>
+
+              <p>Best regards,<br><strong>Subtle Kitchen Team</strong><br>support@subtlekitchen.com</p>
+            </div>
+          `;
+
+          await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: order.user.email,
+            subject: `Your Order Has Been Delivered - Order #${order.orderNumber}`,
+            html: emailHTML,
+          });
+
+          emailsSent.push({
+            orderId: order.orderNumber,
+            customerEmail: order.user.email,
+            status: "sent",
+          });
+
+          console.log(`✅ Email sent to ${order.user.email} for order ${order.orderNumber}`);
+        } catch (error) {
+          console.error(`❌ Failed to send email for order ${order.orderNumber}:`, error.message);
+          failedEmails.push({
+            orderId: order.orderNumber,
+            reason: error.message,
+          });
+        }
+      }
+    } catch (error) {
+      console.error(`❌ Email service error:`, error.message);
+    }
+  }
+
+  res.status(200).json({
+    success: true,
+    updatedCount: result.modifiedCount,
+    notificationsSent: emailsSent.length,
+    failedNotifications: failedEmails.length,
+    message: `${result.modifiedCount} orders updated to ${status}. ${emailsSent.length} emails sent successfully.`,
+    details: {
+      updatedOrders: updatedOrders.map((o) => o.orderNumber),
+      emailsSent,
+      failedEmails,
+    },
+  });
 });
 
 // Get grouped subscription orders (one entry per subscription with all delivery dates)
