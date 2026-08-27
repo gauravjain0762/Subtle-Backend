@@ -47,18 +47,23 @@ exports.getAvailablePlans = catchAsync(async (req, res) => {
 });
 
 exports.selectPlan = catchAsync(async (req, res) => {
-  const { planId, mealId, mealPrice, quantity, startDate, patternId } = req.body;
+  const { planId, items, startDate, patternId } = req.body;
   const userId = req.user._id;
 
   // Validate required fields
-  if (!planId || !mealId || !mealPrice || !quantity || !startDate) {
-    throw new AppError("Missing required fields: planId, mealId, mealPrice, quantity, startDate", 400);
+  if (!planId || !items || !Array.isArray(items) || items.length === 0 || !startDate) {
+    throw new AppError("Missing required fields: planId, items (array), startDate", 400);
   }
 
-  // Validate quantity
-  if (quantity < 1 || quantity > 100) {
-    throw new AppError("Quantity must be between 1 and 100", 400);
-  }
+  // Validate each item
+  items.forEach((item, index) => {
+    if (!item.mealId || !item.mealPrice || !item.quantity) {
+      throw new AppError(`Item ${index} missing required fields: mealId, mealPrice, quantity`, 400);
+    }
+    if (item.quantity < 1 || item.quantity > 100) {
+      throw new AppError(`Item ${index} quantity must be between 1 and 100`, 400);
+    }
+  });
 
   // Get plan
   const plan = await Plan.findById(planId);
@@ -97,52 +102,37 @@ exports.selectPlan = catchAsync(async (req, res) => {
 
   console.log(`📋 Plan retrieved: type=${plan.type}, pattern=${JSON.stringify(pattern)}`);
 
-  // Calculate delivery dates from startDate
-  // Parse date carefully to handle timezone issues
+  // Parse start date
   const [year, month, day] = startDate.split("-").map(Number);
-  const start = new Date(year, month - 1, day); // Use local timezone
+  const start = new Date(year, month - 1, day);
 
   const dayMap = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
   const deliveryDates = [];
 
-  // Determine the day of week for startDate (JavaScript: 0=Sun, 1=Mon, etc.)
-  const startDayOfWeek = start.getDay(); // 0=Sun, 1=Mon, 2=Tue, etc.
-  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const startDayName = dayNames[startDayOfWeek];
+  // Generate delivery dates based on items array (one item = one day)
+  items.forEach((item, index) => {
+    const deliveryDate = new Date(start);
+    deliveryDate.setDate(deliveryDate.getDate() + index);
 
-  console.log(`🔍 DEBUG: startDate=${startDate}, dayOfWeek=${startDayName} (${startDayOfWeek}), pattern=${JSON.stringify(pattern)}`);
-
-  // For each day in the pattern, calculate if it's this week or next
-  pattern.forEach((day) => {
-    const patternDayOfWeek = dayMap[day];
-    let daysToAdd = patternDayOfWeek - startDayOfWeek;
-
-    // If daysToAdd is negative, it's next week (but we only do this week for initial)
-    if (daysToAdd < 0) {
-      daysToAdd += 7; // Make it next week
-    }
-
-    // Only include if it's this week (daysToAdd >= 0 and <= 6)
-    if (daysToAdd >= 0 && daysToAdd <= 6) {
-      const deliveryDate = new Date(start);
-      deliveryDate.setDate(deliveryDate.getDate() + daysToAdd);
-      deliveryDates.push({
-        date: deliveryDate.toISOString().slice(0, 10),
-        dayOfWeek: day,
-      });
-    }
+    const dayOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][deliveryDate.getDay()];
+    deliveryDates.push({
+      date: deliveryDate.toISOString().slice(0, 10),
+      dayOfWeek: dayOfWeek,
+      mealId: item.mealId,
+      mealPrice: item.mealPrice,
+      quantity: item.quantity,
+    });
   });
 
   console.log(`📅 Delivery dates calculated: ${JSON.stringify(deliveryDates)}`);
 
-  // Calculate total charge
-  const numDeliveryDays = deliveryDates.length;
-  const totalCharge = mealPrice * quantity * numDeliveryDays;
+  // Calculate total charge (sum of all items)
+  const totalCharge = items.reduce((sum, item) => sum + (item.mealPrice * item.quantity), 0);
 
-  console.log(`💰 Charge calculation: £${mealPrice} × ${quantity} × ${numDeliveryDays} days = £${totalCharge}`);
+  console.log(`💰 Charge calculation: £${totalCharge.toFixed(2)} (sum of ${items.length} meals)`);
 
-  if (numDeliveryDays === 0) {
-    throw new AppError("No delivery dates found for the selected pattern and start date", 400);
+  if (deliveryDates.length === 0) {
+    throw new AppError("No delivery dates generated", 400);
   }
 
   if (totalCharge < 0.30) {
@@ -156,34 +146,36 @@ exports.selectPlan = catchAsync(async (req, res) => {
     ? process.env.FRONTEND_URL || "https://subtlekitchen.co.uk"
     : "http://localhost:3000";
 
+  // Create line items for each meal
+  const lineItems = items.map((item, index) => ({
+    price_data: {
+      currency: "gbp",
+      product_data: {
+        name: `${plan.name} - Day ${index + 1}`,
+        description: `Delivery: ${deliveryDates[index].date}`,
+      },
+      unit_amount: Math.round(item.mealPrice * 100),
+    },
+    quantity: item.quantity,
+  }));
+
+  // Serialize items array for metadata (Stripe has string limits)
+  const itemsJson = JSON.stringify(items);
+
   const checkoutSession = await stripe.checkout.sessions.create({
     payment_method_types: ["card"],
     mode: "payment",
     currency: "gbp",
     customer_email: req.user.email,
-    line_items: [
-      {
-        price_data: {
-          currency: "gbp",
-          product_data: {
-            name: `${plan.name} Subscription - ${quantity}x ${pattern.length} days`,
-            description: `${deliveryDates.map((d) => d.date).join(", ")}`,
-          },
-          unit_amount: Math.round(totalCharge * 100),
-        },
-        quantity: 1,
-      },
-    ],
+    line_items: lineItems,
     success_url: `${baseUrl}/confirmation?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${baseUrl}/subscription/review?cancelled=true`,
     metadata: {
       planId: planId.toString(),
-      mealId: mealId.toString(),
       userId: req.user._id.toString(),
-      mealPrice: mealPrice.toString(),
-      quantity: quantity.toString(),
       startDate: startDate,
       patternId: patternId || "none",
+      items: itemsJson,
     },
   });
 
@@ -191,16 +183,10 @@ exports.selectPlan = catchAsync(async (req, res) => {
 
   res.status(200).json({
     success: true,
-    deliveryDates,
     summary: {
-      planType: plan.type,
-      planName: plan.name,
-      mealPrice: mealPrice,
-      quantity: quantity,
-      numDeliveryDays: numDeliveryDays,
       totalCharge: totalCharge,
-      pattern: pattern,
     },
+    deliveryDates,
     checkoutUrl: checkoutSession.url,
     checkoutSessionId: checkoutSession.id,
   });
@@ -230,7 +216,8 @@ exports.verifyCheckoutSession = catchAsync(async (req, res) => {
   }
 
   // Extract metadata
-  const { planId, mealId, mealPrice, quantity, startDate, patternId } = session.metadata;
+  const { planId, startDate, patternId, items: itemsJson } = session.metadata;
+  const items = JSON.parse(itemsJson);
 
   // Check if user already has an active subscription
   const existingSubscription = await Subscription.findOne({
@@ -290,16 +277,17 @@ exports.verifyCheckoutSession = catchAsync(async (req, res) => {
     }
   }
 
+  // Calculate total charge from items
+  const totalCharge = items.reduce((sum, item) => sum + (item.mealPrice * item.quantity), 0);
+
   // Create subscription
   const subscription = await Subscription.create({
     user: userId,
     plan: planId,
-    meal: mealId,
+    items: items, // Store all meals
     workspace: workspace ? workspace._id : null,
     workspaceCode: workspaceCode || (user ? user.workspaceCode : null),
     workspaceName: workspaceName,
-    mealPrice: parseFloat(mealPrice),
-    quantity: parseInt(quantity),
     pattern,
     status: "active",
     startDate: start,
@@ -308,7 +296,7 @@ exports.verifyCheckoutSession = catchAsync(async (req, res) => {
     billingHistory: [
       {
         date: new Date(),
-        amount: parseFloat(mealPrice) * parseInt(quantity) * pattern.length,
+        amount: totalCharge,
         status: "succeeded",
         stripeChargeId: session.payment_intent,
       },
@@ -333,10 +321,10 @@ exports.verifyCheckoutSession = catchAsync(async (req, res) => {
     success: true,
     message: "Payment successful! Subscription created.",
     subscription: {
-      _id: subscription._id,
-      meal: subscription.meal,
-      mealPrice: subscription.mealPrice,
-      quantity: subscription.quantity,
+      id: subscription._id,
+      planName: plan.name,
+      totalCharge: totalCharge,
+      items: subscription.items,
       pattern: subscription.pattern,
       status: subscription.status,
       startDate: subscription.startDate,

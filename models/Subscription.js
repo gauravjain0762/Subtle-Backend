@@ -11,16 +11,26 @@ const billingHistorySchema = new mongoose.Schema(
   { _id: false }
 );
 
+const subscriptionItemSchema = new mongoose.Schema(
+  {
+    mealId: { type: mongoose.Schema.Types.ObjectId, ref: "Dish", required: true },
+    mealPrice: { type: Number, required: true },
+    quantity: { type: Number, required: true, min: 1, max: 100 },
+  },
+  { _id: false }
+);
+
 const subscriptionSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, unique: true },
     plan: { type: mongoose.Schema.Types.ObjectId, ref: "Plan", required: true },
-    meal: { type: mongoose.Schema.Types.ObjectId, ref: "Dish", required: true },
+    meal: { type: mongoose.Schema.Types.ObjectId, ref: "Dish" }, // For backward compatibility
+    items: { type: [subscriptionItemSchema], default: [] }, // NEW: Array of meals for weekly/one-off plans
     workspace: { type: mongoose.Schema.Types.ObjectId, ref: "Workspace" },
     workspaceCode: { type: String, uppercase: true, trim: true },
     workspaceName: { type: String, trim: true },
-    mealPrice: { type: Number, required: true },
-    quantity: { type: Number, required: true, min: 1, max: 100 },
+    mealPrice: { type: Number }, // For backward compatibility
+    quantity: { type: Number, min: 1, max: 100 }, // For backward compatibility
     pattern: { type: [String], required: true }, // e.g., ["Mon", "Tue", "Wed", "Thu", "Fri"]
     status: { type: String, enum: ["active", "paused"], default: "active" },
     startDate: { type: Date, required: true },
