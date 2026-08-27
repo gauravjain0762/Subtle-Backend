@@ -509,6 +509,37 @@ exports.cancelSubscription = catchAsync(async (req, res) => {
     // Don't fail the subscription cancellation if order cancellation fails
   }
 
+  // Create admin notification in database
+  try {
+    const Notification = require("../models/Notification");
+    const totalRevenue = subscription.billingHistory?.reduce((sum, bill) => sum + (bill.amount || 0), 0) || 0;
+    const subscriptionDuration = Math.floor((new Date() - new Date(subscription.startDate)) / (1000 * 60 * 60 * 24));
+    const userName = `${subscription.user.firstName || ""} ${subscription.user.lastName || ""}`.trim() || subscription.user.email;
+
+    await Notification.create({
+      type: "subscription_cancelled",
+      title: `Subscription Cancelled - ${userName}`,
+      message: `${userName} cancelled their ${subscription.plan.name}. ${cancelledOrdersCount} orders cancelled.`,
+      data: {
+        subscriptionId: subscription._id,
+        userId: subscription.user._id,
+        customerName: userName,
+        contactEmail: subscription.user.email,
+        planName: subscription.plan.name,
+        planType: subscription.plan.type,
+        totalRevenue: totalRevenue,
+        subscriptionDuration: subscriptionDuration,
+        cancelledOrdersCount: cancelledOrdersCount,
+      },
+      read: false,
+    });
+
+    console.log(`✅ Admin notification created for subscription cancellation`);
+  } catch (error) {
+    console.error(`⚠️ Failed to create admin notification: ${error.message}`);
+    // Don't fail the subscription cancellation if notification fails
+  }
+
   // Send admin notification
   let adminNotificationSent = false;
   let adminNotificationError = null;

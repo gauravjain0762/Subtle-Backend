@@ -4,7 +4,7 @@ const notificationSchema = new mongoose.Schema(
   {
     type: {
       type: String,
-      enum: ["workspace_request", "new_order"],
+      enum: ["workspace_request", "new_order", "subscription_cancelled"],
       required: true,
     },
     title: { type: String, required: true },
@@ -12,11 +12,18 @@ const notificationSchema = new mongoose.Schema(
     data: {
       workspaceRequestId: mongoose.Schema.Types.ObjectId,
       orderId: mongoose.Schema.Types.ObjectId,
+      subscriptionId: mongoose.Schema.Types.ObjectId,
+      userId: mongoose.Schema.Types.ObjectId,
       workspaceName: String,
       contactEmail: String,
+      customerName: String,
       orderNumber: String,
       orderTotal: Number,
       planType: String, // "one-time", "weekly", "one-off"
+      planName: String,
+      totalRevenue: Number,
+      subscriptionDuration: Number, // days
+      cancelledOrdersCount: Number,
     },
     read: { type: Boolean, default: false },
     readAt: Date,
