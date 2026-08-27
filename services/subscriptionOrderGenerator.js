@@ -3,12 +3,12 @@ const Order = require("../models/Order");
 const { generateDailyRef } = require("../utils/generateRef");
 const getNextSequence = require("../utils/getNextSequence");
 
-// Helper: Get next N delivery dates for a subscription
-const getDeliveryDates = (subscription, daysAhead = 28) => {
+// Helper: Get delivery dates for CURRENT BILLING CYCLE ONLY (first 7 days)
+const getDeliveryDatesForCurrentWeek = (subscription) => {
   const dates = [];
   const startDate = new Date(subscription.startDate);
   const endDate = new Date(startDate);
-  endDate.setDate(endDate.getDate() + daysAhead);
+  endDate.setDate(endDate.getDate() + 7); // Only 7 days ahead for current billing cycle
 
   const WEEKDAY_CODES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -23,14 +23,12 @@ const getDeliveryDates = (subscription, daysAhead = 28) => {
       current.setDate(current.getDate() + 1);
     }
   } else if (subscription.plan.type === "one-off") {
-    // One-off: alternate days
+    // One-off: alternate days (only for first week)
     let current = new Date(startDate);
     let dayCount = 0;
     while (current < endDate) {
       const dayCode = WEEKDAY_CODES[current.getDay()];
-      // Alternate day pattern: days 0, 2, 4, 6, 8, 10, 12, 14, etc.
       if (dayCount % 2 === 0) {
-        // Check if this day is in the selected pattern for one-off
         const selectedPattern = subscription.pattern;
         if (selectedPattern.includes(dayCode)) {
           dates.push(toDateStr(current));
@@ -108,34 +106,39 @@ const generateSubscriptionOrders = async () => {
           continue;
         }
 
-        // Get pattern-based delivery dates (one per day in pattern for 4 weeks)
+        // Get delivery dates for CURRENT BILLING CYCLE ONLY (first week)
         const pattern = subscription.pattern || [];
         const items = subscription.items || [];
         const startDate = new Date(subscription.startDate);
         const deliveryDates = [];
 
         const dayIndices = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + 7);
 
-        // Generate dates for 28 days
-        for (let week = 0; week < 4; week++) {
-          for (let dayIdx = 0; dayIdx < pattern.length; dayIdx++) {
-            const dayName = pattern[dayIdx];
-            const dayOfWeekIndex = dayIndices[dayName];
+        const WEEKDAY_CODES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-            if (dayOfWeekIndex === undefined) continue;
+        // Generate dates for CURRENT WEEK ONLY
+        let current = new Date(startDate);
+        let itemIndex = 0;
 
-            const orderDate = new Date(startDate);
-            orderDate.setDate(startDate.getDate() + week * 7 + dayOfWeekIndex);
+        while (current < endDate && itemIndex < pattern.length) {
+          const dayCode = WEEKDAY_CODES[current.getDay()];
 
+          if (pattern.includes(dayCode)) {
             deliveryDates.push({
-              date: orderDate.toISOString().split('T')[0],
-              dayName: dayName,
-              itemIndex: dayIdx,
+              date: current.toISOString().split('T')[0],
+              dayName: dayCode,
+              itemIndex: itemIndex,
             });
+            itemIndex++;
           }
+
+          current.setDate(current.getDate() + 1);
         }
 
-        console.log(`📅 Generated ${deliveryDates.length} potential delivery dates`);
+        console.log(`📅 Generated ${deliveryDates.length} delivery dates for CURRENT WEEK ONLY (billing cycle)`);
+        console.log(`⏳ Future weeks' orders will be created after next billing cycle payment succeeds`);
 
         // Filter out dates that already have orders
         const existingOrders = await Order.find({
