@@ -8,42 +8,68 @@ const catchAsync = require("../utils/catchAsync");
 
 // Helper: Generate upcoming orders from subscription
 async function generateUpcomingOrdersArray(subscription) {
-  const upcomingOrders = [];
-  const startDate = new Date(subscription.startDate);
-  const pattern = subscription.pattern;
-  const items = subscription.items;
+  try {
+    const upcomingOrders = [];
+    const startDate = new Date(subscription.startDate);
+    const pattern = subscription.pattern || [];
+    const items = subscription.items || [];
 
-  const dayIndices = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+    console.log(`🔍 Generating orders for subscription ${subscription._id}: pattern=${JSON.stringify(pattern)}, items=${items.length}`);
 
-  for (let i = 0; i < pattern.length; i++) {
-    const dayName = pattern[i];
-    const dayIndex = dayIndices[dayName];
+    const dayIndices = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
 
-    if (dayIndex === undefined) continue;
+    for (let i = 0; i < pattern.length; i++) {
+      const dayName = pattern[i];
+      const dayIndex = dayIndices[dayName];
 
-    const scheduledDate = new Date(startDate);
-    scheduledDate.setDate(startDate.getDate() + dayIndex);
+      if (dayIndex === undefined) {
+        console.log(`⚠️ Invalid day name: ${dayName}`);
+        continue;
+      }
 
-    const item = items[i];
-    if (!item) continue;
+      const item = items[i];
+      if (!item) {
+        console.log(`⚠️ No item found for index ${i}`);
+        continue;
+      }
 
-    // Fetch meal details
-    const meal = await Dish.findById(item.mealId);
-    if (!meal) continue;
+      const scheduledDate = new Date(startDate);
+      scheduledDate.setDate(startDate.getDate() + dayIndex);
 
-    upcomingOrders.push({
-      _id: `order_${dayName.toLowerCase()}_${subscription._id}`,
-      scheduledDate: scheduledDate.toISOString().split('T')[0],
-      dayOfWeek: dayName,
-      mealId: item.mealId,
-      mealName: meal.name,
-      mealPrice: item.mealPrice,
-      quantity: item.quantity,
-      status: "scheduled",
-    });
+      // Fetch meal details
+      const mealId = item.mealId ? item.mealId.toString() : null;
+      if (!mealId) {
+        console.log(`⚠️ No mealId for item ${i}`);
+        continue;
+      }
+
+      const meal = await Dish.findById(mealId);
+      if (!meal) {
+        console.log(`⚠️ Meal not found: ${mealId}`);
+        continue;
+      }
+
+      const orderObj = {
+        _id: `order_${dayName.toLowerCase()}_${subscription._id}`,
+        scheduledDate: scheduledDate.toISOString().split('T')[0],
+        dayOfWeek: dayName,
+        mealId: mealId,
+        mealName: meal.name,
+        mealPrice: item.mealPrice,
+        quantity: item.quantity,
+        status: "scheduled",
+      };
+
+      upcomingOrders.push(orderObj);
+      console.log(`✅ Added order for ${dayName}: ${meal.name}`);
+    }
+
+    console.log(`✅ Generated ${upcomingOrders.length} upcoming orders`);
+    return upcomingOrders;
+  } catch (error) {
+    console.error(`❌ Error generating upcoming orders: ${error.message}`);
+    return [];
   }
-
-  return upcomingOrders;
 }
 
 // Helper: Get next Monday
@@ -383,11 +409,13 @@ exports.verifyCheckoutSession = catchAsync(async (req, res) => {
 exports.getMySubscription = catchAsync(async (req, res) => {
   const userId = req.user._id;
 
+  console.log(`📋 Fetching subscription for user ${userId}`);
+
   const subscription = await Subscription.findOne({ user: userId, status: "active" })
-    .populate("plan")
-    .populate("items.mealId", "name price");
+    .populate("plan");
 
   if (!subscription) {
+    console.log(`⚠️ No active subscription found for user ${userId}`);
     return res.status(200).json({
       success: true,
       subscription: null,
@@ -395,8 +423,12 @@ exports.getMySubscription = catchAsync(async (req, res) => {
     });
   }
 
+  console.log(`✅ Subscription found: ${subscription._id}, items: ${subscription.items.length}, pattern: ${JSON.stringify(subscription.pattern)}`);
+
   // Generate upcoming orders
   const upcomingOrders = await generateUpcomingOrdersArray(subscription);
+
+  console.log(`📦 Returning subscription with ${upcomingOrders.length} upcoming orders`);
 
   res.status(200).json({
     success: true,
