@@ -1,9 +1,50 @@
 const Plan = require("../models/Plan");
 const Subscription = require("../models/Subscription");
 const RecurringOrder = require("../models/RecurringOrder");
+const Dish = require("../models/Dish");
 const { getStripe } = require("../config/stripe");
 const AppError = require("../utils/appError");
 const catchAsync = require("../utils/catchAsync");
+
+// Helper: Generate upcoming orders from subscription
+async function generateUpcomingOrdersArray(subscription) {
+  const upcomingOrders = [];
+  const startDate = new Date(subscription.startDate);
+  const pattern = subscription.pattern;
+  const items = subscription.items;
+
+  const dayIndices = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+
+  for (let i = 0; i < pattern.length; i++) {
+    const dayName = pattern[i];
+    const dayIndex = dayIndices[dayName];
+
+    if (dayIndex === undefined) continue;
+
+    const scheduledDate = new Date(startDate);
+    scheduledDate.setDate(startDate.getDate() + dayIndex);
+
+    const item = items[i];
+    if (!item) continue;
+
+    // Fetch meal details
+    const meal = await Dish.findById(item.mealId);
+    if (!meal) continue;
+
+    upcomingOrders.push({
+      _id: `order_${dayName.toLowerCase()}_${subscription._id}`,
+      scheduledDate: scheduledDate.toISOString().split('T')[0],
+      dayOfWeek: dayName,
+      mealId: item.mealId,
+      mealName: meal.name,
+      mealPrice: item.mealPrice,
+      quantity: item.quantity,
+      status: "scheduled",
+    });
+  }
+
+  return upcomingOrders;
+}
 
 // Helper: Get next Monday
 function getNextMonday() {
@@ -305,6 +346,9 @@ exports.verifyCheckoutSession = catchAsync(async (req, res) => {
 
   console.log(`✅ Subscription created after checkout: ${subscription._id}`);
 
+  // Generate upcoming orders array for response
+  const upcomingOrders = await generateUpcomingOrdersArray(subscription);
+
   // Immediately generate orders for the new subscription (don't wait for cron)
   try {
     const { generateSubscriptionOrders } = require("../services/subscriptionOrderGenerator");
@@ -330,6 +374,65 @@ exports.verifyCheckoutSession = catchAsync(async (req, res) => {
       startDate: subscription.startDate,
       nextChargeDate: subscription.nextChargeDate,
     },
+    billingHistory: subscription.billingHistory,
+    upcomingOrders,
+  });
+});
+
+// Get user's subscription with upcoming orders
+exports.getMySubscription = catchAsync(async (req, res) => {
+  const userId = req.user._id;
+
+  const subscription = await Subscription.findOne({ user: userId, status: "active" })
+    .populate("plan")
+    .populate("items.mealId", "name price");
+
+  if (!subscription) {
+    return res.status(200).json({
+      success: true,
+      subscription: null,
+      upcomingOrders: [],
+    });
+  }
+
+  // Generate upcoming orders
+  const upcomingOrders = await generateUpcomingOrdersArray(subscription);
+
+  res.status(200).json({
+    success: true,
+    subscription: {
+      _id: subscription._id,
+      plan: subscription.plan,
+      items: subscription.items,
+      pattern: subscription.pattern,
+      status: subscription.status,
+      startDate: subscription.startDate,
+      nextChargeDate: subscription.nextChargeDate,
+      totalCharges: subscription.totalCharges,
+      billingHistory: subscription.billingHistory,
+    },
+    upcomingOrders,
+  });
+});
+
+// Get upcoming orders for subscription
+exports.getUpcomingOrders = catchAsync(async (req, res) => {
+  const userId = req.user._id;
+
+  const subscription = await Subscription.findOne({ user: userId, status: "active" });
+
+  if (!subscription) {
+    return res.status(200).json({
+      success: true,
+      upcomingOrders: [],
+    });
+  }
+
+  const upcomingOrders = await generateUpcomingOrdersArray(subscription);
+
+  res.status(200).json({
+    success: true,
+    upcomingOrders,
   });
 });
 
