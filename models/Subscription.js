@@ -32,10 +32,11 @@ const subscriptionSchema = new mongoose.Schema(
     mealPrice: { type: Number }, // For backward compatibility
     quantity: { type: Number, min: 1, max: 100 }, // For backward compatibility
     pattern: { type: [String], required: true }, // e.g., ["Mon", "Tue", "Wed", "Thu", "Fri"]
-    status: { type: String, enum: ["active", "paused"], default: "active" },
+    status: { type: String, enum: ["active", "paused", "cancelled"], default: "active" },
     startDate: { type: Date, required: true },
     nextChargeDate: { type: Date, required: true },
     pausedFrom: { type: Date },
+    cancelledDate: { type: Date },
     stripeCustomerId: { type: String },
     totalCharges: { type: Number, default: 0 },
     billingHistory: { type: [billingHistorySchema], default: [] },

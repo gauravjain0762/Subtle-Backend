@@ -10,6 +10,7 @@ const {
   updateSubscription,
   pauseSubscription,
   resumeSubscription,
+  cancelSubscription,
 } = require("../controllers/userSubscriptionsController");
 
 const router = express.Router();
@@ -23,8 +24,9 @@ router.post("/checkout", checkout);
 router.get("/verify-checkout", verifyCheckoutSession);
 router.get("/my-plan", getMySubscription);
 router.get("/upcoming-orders", getUpcomingOrders);
-router.patch("/my", updateSubscription);  // ← New unified endpoint
-router.post("/pause", pauseSubscription);  // ← Legacy endpoint
-router.post("/resume", resumeSubscription);  // ← Legacy endpoint
+router.patch("/my", updateSubscription);
+router.delete("/my", cancelSubscription);
+router.post("/pause", pauseSubscription);
+router.post("/resume", resumeSubscription);
 
 module.exports = router;

@@ -436,6 +436,70 @@ exports.getUpcomingOrders = catchAsync(async (req, res) => {
   });
 });
 
+// Cancel subscription
+exports.cancelSubscription = catchAsync(async (req, res) => {
+  const userId = req.user._id;
+
+  const subscription = await Subscription.findOne({ user: userId, status: "active" })
+    .populate("plan")
+    .populate("user", "email firstName lastName");
+
+  if (!subscription) {
+    throw new AppError("No active subscription found", 404);
+  }
+
+  // Update subscription to cancelled
+  subscription.status = "cancelled";
+  subscription.cancelledDate = new Date();
+  await subscription.save();
+
+  console.log(`🔴 Subscription cancelled: ${subscription._id} by user ${userId}`);
+
+  // Send admin notification
+  try {
+    const nodemailer = require("nodemailer");
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+
+    const adminEmail = process.env.ADMIN_NOTIFY_EMAIL;
+    const userName = `${subscription.user.firstName || ""} ${subscription.user.lastName || ""}`.trim() || subscription.user.email;
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: adminEmail,
+      subject: `⚠️ Subscription Cancelled - ${userName}`,
+      html: `
+        <h2>Subscription Cancelled</h2>
+        <p><strong>User:</strong> ${userName}</p>
+        <p><strong>Email:</strong> ${subscription.user.email}</p>
+        <p><strong>Plan:</strong> ${subscription.plan.name}</p>
+        <p><strong>Cancelled Date:</strong> ${new Date().toLocaleString()}</p>
+        <p><strong>Reason:</strong> User initiated cancellation</p>
+      `,
+    });
+
+    console.log(`✅ Admin notification sent to ${adminEmail}`);
+  } catch (error) {
+    console.error(`⚠️ Failed to send admin notification: ${error.message}`);
+    // Don't fail the cancellation if email fails
+  }
+
+  res.status(200).json({
+    success: true,
+    message: "Subscription cancelled successfully",
+    subscription: {
+      _id: subscription._id,
+      status: subscription.status,
+      cancelledDate: subscription.cancelledDate,
+    },
+  });
+});
+
 // Legacy checkout - kept for backward compatibility
 exports.checkout = catchAsync(async (req, res) => {
   const { planId, mealId, mealPrice, quantity, startDate, patternId, paymentIntentId } = req.body;
