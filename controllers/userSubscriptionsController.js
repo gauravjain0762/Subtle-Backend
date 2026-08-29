@@ -173,25 +173,50 @@ exports.selectPlan = catchAsync(async (req, res) => {
   const [year, month, day] = startDate.split("-").map(Number);
   const start = new Date(year, month - 1, day);
 
-  const dayMap = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
+  const dayIndices = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const WEEKDAY_CODES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const deliveryDates = [];
 
-  // Generate delivery dates based on items array (one item = one day)
-  items.forEach((item, index) => {
-    const deliveryDate = new Date(start);
-    deliveryDate.setDate(deliveryDate.getDate() + index);
+  // For one-off plans, filter delivery dates by the selected pattern
+  if (plan.type === "one-off") {
+    // Generate delivery dates based on pattern (one date per selected day)
+    pattern.forEach((dayName, itemIndex) => {
+      const dayIndex = dayIndices[dayName];
+      const deliveryDate = new Date(start);
+      deliveryDate.setDate(start.getDate() + dayIndex);
 
-    const dayOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][deliveryDate.getDay()];
-    deliveryDates.push({
-      date: deliveryDate.toISOString().slice(0, 10),
-      dayOfWeek: dayOfWeek,
-      mealId: item.mealId,
-      mealPrice: item.mealPrice,
-      quantity: item.quantity,
+      const item = items[itemIndex];
+      if (!item) {
+        console.warn(`⚠️ No item found for pattern day ${itemIndex} (${dayName})`);
+        return;
+      }
+
+      deliveryDates.push({
+        date: deliveryDate.toISOString().slice(0, 10),
+        dayOfWeek: dayName,
+        mealId: item.mealId,
+        mealPrice: item.mealPrice,
+        quantity: item.quantity,
+      });
     });
-  });
+  } else {
+    // For weekly plans, generate delivery dates based on items array (one item = one day)
+    items.forEach((item, index) => {
+      const deliveryDate = new Date(start);
+      deliveryDate.setDate(start.getDate() + index);
 
-  console.log(`📅 Delivery dates calculated: ${JSON.stringify(deliveryDates)}`);
+      const dayOfWeek = WEEKDAY_CODES[deliveryDate.getDay()];
+      deliveryDates.push({
+        date: deliveryDate.toISOString().slice(0, 10),
+        dayOfWeek: dayOfWeek,
+        mealId: item.mealId,
+        mealPrice: item.mealPrice,
+        quantity: item.quantity,
+      });
+    });
+  }
+
+  console.log(`📅 Delivery dates calculated for ${plan.type} plan: ${JSON.stringify(deliveryDates)}`);
 
   // Calculate total charge (sum of all items)
   const totalCharge = items.reduce((sum, item) => sum + (item.mealPrice * item.quantity), 0);
