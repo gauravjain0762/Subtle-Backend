@@ -180,10 +180,18 @@ exports.selectPlan = catchAsync(async (req, res) => {
   // For one-off plans, filter delivery dates by the selected pattern
   if (plan.type === "one-off") {
     // Generate delivery dates based on pattern (one date per selected day)
+    const currentDayOfWeek = start.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
     pattern.forEach((dayName, itemIndex) => {
-      const dayIndex = dayIndices[dayName];
+      const targetDayOfWeek = dayIndices[dayName];
       const deliveryDate = new Date(start);
-      deliveryDate.setDate(start.getDate() + dayIndex);
+
+      // Calculate days to add: how far from startDate's day to reach target day
+      let daysToAdd = targetDayOfWeek - currentDayOfWeek;
+      if (daysToAdd < 0) {
+        daysToAdd += 7; // If negative, target day is in next week
+      }
+
+      deliveryDate.setDate(start.getDate() + daysToAdd);
 
       const item = items[itemIndex];
       if (!item) {
