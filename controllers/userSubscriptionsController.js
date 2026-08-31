@@ -405,6 +405,116 @@ exports.verifyCheckoutSession = catchAsync(async (req, res) => {
 
   console.log(`✅ Subscription created after checkout: ${subscription._id}`);
 
+  // Create admin notification for new subscription
+  try {
+    const Notification = require("../models/Notification");
+    const userName = `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email;
+    const itemsCount = subscription.items?.length || 0;
+
+    await Notification.create({
+      type: "new_subscription",
+      title: `New Subscription - ${userName}`,
+      message: `${userName} subscribed to ${plan.name} (${itemsCount} meals). First charge: £${totalCharge.toFixed(2)}`,
+      data: {
+        subscriptionId: subscription._id,
+        userId: subscription.user,
+        customerName: userName,
+        contactEmail: user.email,
+        planName: plan.name,
+        planType: plan.type,
+        itemsCount: itemsCount,
+        totalCharge: totalCharge,
+        startDate: subscription.startDate,
+      },
+      read: false,
+    });
+
+    console.log(`✅ Admin notification created for new subscription`);
+  } catch (error) {
+    console.error(`⚠️ Failed to create admin notification: ${error.message}`);
+  }
+
+  // Send admin email for new subscription
+  try {
+    const nodemailer = require("nodemailer");
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+
+    const adminEmail = process.env.ADMIN_NOTIFY_EMAIL;
+    if (adminEmail) {
+      const userName = `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email;
+      const itemsCount = subscription.items?.length || 0;
+      const itemsList = subscription.items
+        .map((item) => `  • Meal ID: ${item.mealId}\n    Price: £${item.mealPrice}\n    Quantity: ${item.quantity}`)
+        .join("\n\n");
+
+      const emailHTML = `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+          <div style="border-left: 4px solid #4CAF50; padding-left: 15px; margin-bottom: 20px;">
+            <h2 style="margin: 0; color: #4CAF50;">✅ New Subscription Created</h2>
+            <p style="margin: 5px 0; font-size: 14px; color: #666;">User-initiated subscription signup</p>
+          </div>
+
+          <div style="border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; background: #f5f5f5;">
+            <h3>CUSTOMER DETAILS</h3>
+            <p><strong>Name:</strong> ${userName}</p>
+            <p><strong>Email:</strong> ${user.email}</p>
+            <p><strong>User ID:</strong> ${subscription.user}</p>
+          </div>
+
+          <div style="border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; background: #f5f5f5;">
+            <h3>SUBSCRIPTION DETAILS</h3>
+            <p><strong>Plan:</strong> ${plan.name}</p>
+            <p><strong>Plan Type:</strong> ${plan.type === "weekly" ? "Weekly" : "One-Off"}</p>
+            <p><strong>Pattern:</strong> ${subscription.pattern.join(", ")}</p>
+            <p><strong>Subscription ID:</strong> ${subscription._id}</p>
+            <p><strong>Start Date:</strong> ${new Date(subscription.startDate).toLocaleDateString()}</p>
+            <p><strong>Next Charge Date:</strong> ${new Date(subscription.nextChargeDate).toLocaleDateString()}</p>
+          </div>
+
+          <div style="border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; background: #f5f5f5;">
+            <h3>ORDERED MEALS (${itemsCount})</h3>
+            <pre style="white-space: pre-wrap; font-family: Arial; background: white; padding: 10px;">${itemsList}</pre>
+          </div>
+
+          <div style="border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; background: #f5f5f5;">
+            <h3>PAYMENT INFORMATION</h3>
+            <p><strong>First Charge Amount:</strong> £${totalCharge.toFixed(2)}</p>
+            <p><strong>Payment Status:</strong> ✅ Succeeded</p>
+            <p><strong>Payment Method:</strong> Card (Stripe)</p>
+          </div>
+
+          <div style="background: #e3f2fd; padding: 15px; border-radius: 4px; margin: 15px 0;">
+            <p><strong>ℹ️ NEXT STEPS:</strong></p>
+            <ul>
+              <li>Customer will receive ${itemsCount} meal${itemsCount > 1 ? 's' : ''} according to pattern</li>
+              <li>Recurring charges scheduled for next week</li>
+              <li>Monitor delivery status in admin panel</li>
+            </ul>
+          </div>
+
+          <p style="color: #666; font-size: 12px; margin-top: 20px;">This is an automated notification from Subtle Kitchen admin system.</p>
+        </div>
+      `;
+
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: adminEmail,
+        subject: `✅ NEW SUBSCRIPTION: ${userName} - ${plan.name}`,
+        html: emailHTML,
+      });
+
+      console.log(`✅ Admin email sent for new subscription to ${adminEmail}`);
+    }
+  } catch (error) {
+    console.error(`⚠️ Failed to send admin email for new subscription: ${error.message}`);
+  }
+
   // Generate upcoming orders array for response
   const upcomingOrders = await generateUpcomingOrdersArray(subscription);
 

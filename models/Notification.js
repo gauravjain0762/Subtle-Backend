@@ -4,7 +4,7 @@ const notificationSchema = new mongoose.Schema(
   {
     type: {
       type: String,
-      enum: ["workspace_request", "new_order", "subscription_cancelled"],
+      enum: ["workspace_request", "new_order", "subscription_cancelled", "new_subscription", "order_generated"],
       required: true,
     },
     title: { type: String, required: true },
@@ -24,6 +24,9 @@ const notificationSchema = new mongoose.Schema(
       totalRevenue: Number,
       subscriptionDuration: Number, // days
       cancelledOrdersCount: Number,
+      itemsCount: Number, // for new subscription
+      totalCharge: Number, // for new subscription
+      startDate: Date, // for new subscription
     },
     read: { type: Boolean, default: false },
     readAt: Date,
