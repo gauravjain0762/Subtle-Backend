@@ -286,6 +286,7 @@ exports.selectPlan = catchAsync(async (req, res) => {
       startDate: startDate,
       patternId: patternId || "none",
       items: itemsJson,
+      isRecurring: String(isRecurring), // Store as string (Stripe metadata limitation), convert boolean to string
     },
   });
 
@@ -326,7 +327,11 @@ exports.verifyCheckoutSession = catchAsync(async (req, res) => {
   }
 
   // Extract metadata
-  const { planId, startDate, patternId, items: itemsJson } = session.metadata;
+  const { planId, startDate, patternId, items: itemsJson, isRecurring: isRecurringStr } = session.metadata;
+
+  // Parse isRecurring with backwards compatibility: default to true if missing
+  // (sessions created before this field was added will not have it)
+  const isRecurring = isRecurringStr === 'false' ? false : true;
   const items = JSON.parse(itemsJson);
 
   // Check if user already has an active subscription
