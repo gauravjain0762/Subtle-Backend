@@ -10,6 +10,16 @@ const catchAsync = require("../utils/catchAsync");
 async function generateUpcomingOrdersArray(subscription) {
   try {
     const upcomingOrders = [];
+
+    // Check if subscription is recurring (backwards compatible: default to true if field missing)
+    const isRecurring = subscription.isRecurring ?? true;
+
+    // If non-recurring, return empty array - no future orders
+    if (!isRecurring) {
+      console.log(`📦 Non-recurring subscription ${subscription._id}: returning empty upcoming orders`);
+      return [];
+    }
+
     const startDate = new Date(subscription.startDate);
     const pattern = subscription.pattern || [];
     const items = subscription.items || [];
@@ -114,7 +124,7 @@ exports.getAvailablePlans = catchAsync(async (req, res) => {
 });
 
 exports.selectPlan = catchAsync(async (req, res) => {
-  const { planId, items, startDate, patternId } = req.body;
+  const { planId, items, startDate, patternId, isRecurring = true } = req.body;
   const userId = req.user._id;
 
   // Validate required fields
@@ -392,6 +402,7 @@ exports.verifyCheckoutSession = catchAsync(async (req, res) => {
     status: "active",
     startDate: start,
     nextChargeDate,
+    isRecurring: isRecurring, // Store recurring flag (defaults to true if not provided)
     totalCharges: 1,
     billingHistory: [
       {
@@ -542,6 +553,7 @@ exports.verifyCheckoutSession = catchAsync(async (req, res) => {
       status: subscription.status,
       startDate: subscription.startDate,
       nextChargeDate: subscription.nextChargeDate,
+      isRecurring: subscription.isRecurring ?? true, // Backwards compatible: default to true
     },
     billingHistory: subscription.billingHistory,
     upcomingOrders,
@@ -585,6 +597,7 @@ exports.getMySubscription = catchAsync(async (req, res) => {
       nextChargeDate: subscription.nextChargeDate,
       totalCharges: subscription.totalCharges,
       billingHistory: subscription.billingHistory,
+      isRecurring: subscription.isRecurring ?? true, // Backwards compatible: default to true
     },
     upcomingOrders,
   });

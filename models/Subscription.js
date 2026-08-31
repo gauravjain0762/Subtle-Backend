@@ -41,6 +41,7 @@ const subscriptionSchema = new mongoose.Schema(
     totalCharges: { type: Number, default: 0 },
     billingHistory: { type: [billingHistorySchema], default: [] },
     lastOrderGenerationDate: { type: Date },
+    isRecurring: { type: Boolean, default: true }, // NEW: Track if subscription auto-renews (defaults true for backwards compatibility)
   },
   { timestamps: true }
 );

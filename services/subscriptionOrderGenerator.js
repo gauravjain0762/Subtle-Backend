@@ -77,6 +77,13 @@ const generateSubscriptionOrders = async () => {
 
     for (const subscription of subscriptions) {
       try {
+        // Check if subscription is recurring (backwards compatible: default to true if missing)
+        const isRecurring = subscription.isRecurring ?? true;
+        if (!isRecurring) {
+          console.log(`⏭️ Sub ${subscription._id}: Non-recurring, skipping order generation`);
+          continue;
+        }
+
         // Check if plan exists (might be deleted)
         if (!subscription.plan) {
           console.log(`⚠️ Sub ${subscription._id}: Plan not found, skipping`);
