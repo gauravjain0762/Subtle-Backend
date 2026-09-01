@@ -67,7 +67,7 @@ const generateSubscriptionOrders = async () => {
     const subscriptions = await Subscription.find({ status: "active" })
       .populate("plan")
       .populate("meal")
-      .populate("user", "workspaceCode")
+      .populate("user", "firstName lastName email workspaceCode")
       .populate("workspace");
 
     console.log(`📦 Found ${subscriptions.length} active subscriptions`);
@@ -163,7 +163,10 @@ const generateSubscriptionOrders = async () => {
           continue;
         }
 
-        // Create orders for new delivery dates
+        // Create orders for new delivery dates and collect them for consolidated email
+        const createdOrders = [];
+        const Dish = require("../models/Dish");
+
         for (const dateInfo of newDates) {
           const deliveryDate = dateInfo.date;
           const itemIndex = dateInfo.itemIndex;
@@ -189,7 +192,6 @@ const generateSubscriptionOrders = async () => {
             const totalPrice = Number(item.mealPrice) * item.quantity;
 
             // Fetch meal details
-            const Dish = require("../models/Dish");
             const dish = await Dish.findById(item.mealId);
 
             if (!dish) {
@@ -230,6 +232,17 @@ const generateSubscriptionOrders = async () => {
             generatedCount++;
             console.log(`✅ Created order ${orderNumber} for ${deliveryDate} (${dateInfo.dayName}): ${dish.name}`);
 
+            // Collect order for consolidated email
+            createdOrders.push({
+              orderNumber,
+              deliveryDate,
+              dayName: dateInfo.dayName,
+              dishName: dish.name,
+              quantity: item.quantity,
+              unitPrice: item.mealPrice,
+              totalPrice,
+            });
+
             // Create admin notification for generated order
             try {
               const Notification = require("../models/Notification");
@@ -255,88 +268,106 @@ const generateSubscriptionOrders = async () => {
             } catch (notifyError) {
               console.error(`⚠️ Failed to create notification for order ${orderNumber}:`, notifyError.message);
             }
-
-            // Send admin email for generated order
-            try {
-              const nodemailer = require("nodemailer");
-              const adminEmail = process.env.ADMIN_NOTIFY_EMAIL;
-
-              if (adminEmail) {
-                const transporter = nodemailer.createTransport({
-                  service: "gmail",
-                  auth: {
-                    user: process.env.EMAIL_USER,
-                    pass: process.env.EMAIL_PASS,
-                  },
-                });
-
-                const userName = subscription.user.firstName ? `${subscription.user.firstName} ${subscription.user.lastName}` : subscription.user.email;
-
-                const emailHTML = `
-                  <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                    <div style="border-left: 4px solid #2196F3; padding-left: 15px; margin-bottom: 20px;">
-                      <h2 style="margin: 0; color: #2196F3;">📦 New Subscription Order Generated</h2>
-                      <p style="margin: 5px 0; font-size: 14px; color: #666;">Automatic recurring order created</p>
-                    </div>
-
-                    <div style="border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; background: #f5f5f5;">
-                      <h3>CUSTOMER DETAILS</h3>
-                      <p><strong>Name:</strong> ${userName}</p>
-                      <p><strong>Email:</strong> ${subscription.user.email}</p>
-                      <p><strong>User ID:</strong> ${subscription.user._id || subscription.user}</p>
-                    </div>
-
-                    <div style="border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; background: #f5f5f5;">
-                      <h3>ORDER DETAILS</h3>
-                      <p><strong>Order Number:</strong> ${orderNumber}</p>
-                      <p><strong>Order ID:</strong> ${order._id}</p>
-                      <p><strong>Delivery Date:</strong> ${new Date(deliveryDate).toLocaleDateString()}</p>
-                      <p><strong>Delivery Day:</strong> ${dateInfo.dayName}</p>
-                    </div>
-
-                    <div style="border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; background: #f5f5f5;">
-                      <h3>MEAL DETAILS</h3>
-                      <p><strong>Meal:</strong> ${dish.name}</p>
-                      <p><strong>Quantity:</strong> ${item.quantity}</p>
-                      <p><strong>Unit Price:</strong> £${item.mealPrice.toFixed(2)}</p>
-                      <p><strong>Total:</strong> £${totalPrice.toFixed(2)}</p>
-                    </div>
-
-                    <div style="border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; background: #f5f5f5;">
-                      <h3>SUBSCRIPTION DETAILS</h3>
-                      <p><strong>Plan:</strong> ${subscription.plan.name}</p>
-                      <p><strong>Plan Type:</strong> ${subscription.plan.type === "weekly" ? "Weekly" : "One-Off"}</p>
-                      <p><strong>Subscription ID:</strong> ${subscription._id}</p>
-                    </div>
-
-                    <div style="background: #e8f5e9; padding: 15px; border-radius: 4px; margin: 15px 0;">
-                      <p><strong>✅ STATUS:</strong> Order ready for delivery</p>
-                      <ul>
-                        <li>Payment already collected from customer</li>
-                        <li>Ready to prepare and deliver</li>
-                        <li>Monitor status in admin panel</li>
-                      </ul>
-                    </div>
-
-                    <p style="color: #666; font-size: 12px; margin-top: 20px;">This is an automated notification from Subtle Kitchen admin system.</p>
-                  </div>
-                `;
-
-                await transporter.sendMail({
-                  from: process.env.EMAIL_USER,
-                  to: adminEmail,
-                  subject: `📦 ORDER GENERATED: ${orderNumber} - ${userName} (${subscription.plan.name})`,
-                  html: emailHTML,
-                });
-
-                console.log(`✅ Admin email sent for order ${orderNumber}`);
-              }
-            } catch (emailError) {
-              console.error(`⚠️ Failed to send admin email for order ${orderNumber}:`, emailError.message);
-            }
           } catch (error) {
             errorCount++;
             console.error(`❌ Failed to create order for ${deliveryDate}:`, error.message);
+          }
+        }
+
+        // Send consolidated admin email with all orders for this subscription
+        if (createdOrders.length > 0) {
+          try {
+            const nodemailer = require("nodemailer");
+            const adminEmail = process.env.ADMIN_NOTIFY_EMAIL;
+
+            if (adminEmail) {
+              const transporter = nodemailer.createTransport({
+                service: "gmail",
+                auth: {
+                  user: process.env.EMAIL_USER,
+                  pass: process.env.EMAIL_PASS,
+                },
+              });
+
+              const userName = subscription.user.firstName ? `${subscription.user.firstName} ${subscription.user.lastName}` : subscription.user.email;
+              const userEmail = subscription.user.email || "N/A";
+              const totalOrderAmount = createdOrders.reduce((sum, o) => sum + o.totalPrice, 0);
+
+              // Build meal details table rows
+              const mealRows = createdOrders.map(order => `
+                <tr style="border-bottom: 1px solid #e0e0e0;">
+                  <td style="padding: 10px; text-align: left;">${order.dayName}, ${new Date(order.deliveryDate).toLocaleDateString()}</td>
+                  <td style="padding: 10px; text-align: left;">${order.dishName}</td>
+                  <td style="padding: 10px; text-align: center;">${order.quantity}</td>
+                  <td style="padding: 10px; text-align: right;">£${order.unitPrice.toFixed(2)}</td>
+                  <td style="padding: 10px; text-align: right;">£${order.totalPrice.toFixed(2)}</td>
+                </tr>
+              `).join('');
+
+              const emailHTML = `
+                <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                  <div style="border-left: 4px solid #2196F3; padding-left: 15px; margin-bottom: 20px;">
+                    <h2 style="margin: 0; color: #2196F3;">📦 New Subscription Orders Generated</h2>
+                    <p style="margin: 5px 0; font-size: 14px; color: #666;">Automatic recurring orders created for this billing cycle</p>
+                  </div>
+
+                  <div style="border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; background: #f5f5f5;">
+                    <h3 style="margin-top: 0;">CUSTOMER DETAILS</h3>
+                    <p><strong>Name:</strong> ${userName}</p>
+                    <p><strong>Email:</strong> ${userEmail}</p>
+                    <p><strong>Company Code:</strong> ${workspaceCode}</p>
+                  </div>
+
+                  <div style="border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; background: #f5f5f5;">
+                    <h3 style="margin-top: 0;">ORDER DETAILS</h3>
+                    <p><strong>Total Orders in Cycle:</strong> ${createdOrders.length}</p>
+                    <p><strong>Order Numbers:</strong> ${createdOrders.map(o => o.orderNumber).join(', ')}</p>
+                    <p><strong>Delivery Dates:</strong> ${subscription.plan.type === 'weekly' ? 'Weekly deliveries for current billing cycle' : 'One-off delivery'}</p>
+                  </div>
+
+                  <div style="border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; background: #f5f5f5;">
+                    <h3 style="margin-top: 0;">MEAL DETAILS</h3>
+                    <table style="width: 100%; border-collapse: collapse;">
+                      <thead>
+                        <tr style="background-color: #f0f0f0; border-bottom: 2px solid #2196F3;">
+                          <th style="padding: 10px; text-align: left;">Delivery Date & Day</th>
+                          <th style="padding: 10px; text-align: left;">Dish Name</th>
+                          <th style="padding: 10px; text-align: center;">Quantity</th>
+                          <th style="padding: 10px; text-align: right;">Unit Price</th>
+                          <th style="padding: 10px; text-align: right;">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${mealRows}
+                        <tr style="background-color: #f9f9f9; font-weight: bold; border-top: 2px solid #2196F3;">
+                          <td colspan="4" style="padding: 10px; text-align: right;">Total Amount:</td>
+                          <td style="padding: 10px; text-align: right; color: #2196F3;">£${totalOrderAmount.toFixed(2)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div style="border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; background: #f5f5f5;">
+                    <h3 style="margin-top: 0;">SUBSCRIPTION DETAILS</h3>
+                    <p><strong>Plan Name:</strong> ${subscription.plan.name}</p>
+                    <p><strong>Plan Type:</strong> ${subscription.plan.type === "weekly" ? "Weekly" : "One-Off"}</p>
+                  </div>
+
+                  <p style="color: #666; font-size: 12px; margin-top: 20px;">This is an automated notification from Subtle Kitchen admin system.</p>
+                </div>
+              `;
+
+              await transporter.sendMail({
+                from: process.env.EMAIL_USER,
+                to: adminEmail,
+                subject: `📦 ORDERS GENERATED: ${createdOrders.length} orders for ${userName} (${subscription.plan.name})`,
+                html: emailHTML,
+              });
+
+              console.log(`✅ Consolidated admin email sent for ${createdOrders.length} orders`);
+            }
+          } catch (emailError) {
+            console.error(`⚠️ Failed to send consolidated admin email:`, emailError.message);
           }
         }
 
