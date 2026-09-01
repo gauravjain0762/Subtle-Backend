@@ -67,6 +67,14 @@ const {
   listSubscriptionOrders,
   getBillingReport,
 } = require("../controllers/adminSubscriptionsController");
+const {
+  listNotifications,
+  getNotification,
+  markAsRead,
+  markAllAsRead,
+  getUnreadCount,
+  deleteNotification,
+} = require("../controllers/adminNotificationController");
 
 const router = express.Router();
 
@@ -130,5 +138,12 @@ router.get("/subscriptions", listSubscriptions);
 router.get("/subscriptions/:id", getSubscriptionDetail);
 router.get("/subscription-orders", listSubscriptionOrders);
 router.get("/billing/report", getBillingReport);
+
+router.get("/notifications/unread-count", getUnreadCount);
+router.get("/notifications", listNotifications);
+router.get("/notifications/:id", getNotification);
+router.patch("/notifications/:id/read", markAsRead);
+router.patch("/notifications/mark-all/read", markAllAsRead);
+router.delete("/notifications/:id", deleteNotification);
 
 module.exports = router;
