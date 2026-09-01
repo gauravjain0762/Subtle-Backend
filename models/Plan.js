@@ -17,6 +17,8 @@ const planSchema = new mongoose.Schema(
     pattern: { type: [String], required: true }, // ["Mon", "Tue", "Wed", "Thu", "Fri"] for weekly
     patterns: { type: [patternSchema], default: [] }, // For one-off: [{"Mon", "Wed", "Fri"}, {"Tue", "Thu"}]
     status: { type: String, enum: ["active", "inactive"], default: "active" },
+    monthlyPrice: { type: Number, required: false }, // Monthly pricing (e.g., 47.50 for weekly)
+    annualPrice: { type: Number, required: false }, // Annual pricing (e.g., 570 for weekly)
   },
   { timestamps: true }
 );
