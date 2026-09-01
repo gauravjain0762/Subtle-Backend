@@ -137,6 +137,66 @@ exports.updateOrderStatus = catchAsync(async (req, res) => {
     throw new AppError("Order not found", 404);
   }
 
+  // Send delivery notification to customer automatically
+  if (status === "delivered" && order.user && order.user.email) {
+    try {
+      const nodemailer = require("nodemailer");
+      const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+
+      const customerName = `${order.user.firstName || ""} ${order.user.lastName || ""}`.trim() || order.user.email;
+      const itemsList = order.items
+        .map((item) => `  • ${item.dishName}\n    Quantity: ${item.qty}\n    Portion: ${item.portionSize || "Regular"}\n    Add-ons: ${item.addons?.length > 0 ? item.addons.map((a) => a.name).join(", ") : "None"}`)
+        .join("\n\n");
+
+      const emailHTML = `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+          <h2>Your Order Has Been Delivered 🎉</h2>
+
+          <p>Hi ${customerName},</p>
+
+          <p>Great news! Your order has been delivered.</p>
+
+          <div style="border: 1px solid #ddd; padding: 15px; margin: 20px 0; background: #f9f9f9;">
+            <h3 style="margin-top: 0;">ORDER DETAILS</h3>
+
+            <p><strong>Order ID:</strong> ${order.orderNumber}</p>
+            <p><strong>Delivery Date:</strong> ${new Date(order.deliveryDate).toLocaleDateString()}</p>
+            <p><strong>Subscription:</strong> ${order.planType === "weekly" ? "Weekly Plan" : "One-Off Plan"}</p>
+
+            <h3>Items Ordered:</h3>
+            <pre style="white-space: pre-wrap; font-family: Arial; background: white; padding: 10px;">${itemsList}</pre>
+
+            <p><strong>Total Amount:</strong> £${order.total.toFixed(2)}</p>
+            <p><strong>Payment Method:</strong> ${order.paymentMethod === "subscription" ? "Subscription" : "Card"}</p>
+          </div>
+
+          <p>Thank you for your order! We hope you enjoyed your meal.</p>
+
+          <p>If you have any questions or concerns, please contact us.</p>
+
+          <p>Best regards,<br><strong>Subtle Kitchen Team</strong><br>support@subtlekitchen.com</p>
+        </div>
+      `;
+
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: order.user.email,
+        subject: `Your Order Has Been Delivered - Order #${order.orderNumber}`,
+        html: emailHTML,
+      });
+
+      console.log(`✅ Delivery email sent to ${order.user.email} for order ${order.orderNumber}`);
+    } catch (error) {
+      console.error(`⚠️ Failed to send delivery email for order ${order.orderNumber}:`, error.message);
+    }
+  }
+
   res.status(200).json({ success: true, order: toAdminOrderJSON(order) });
 });
 
@@ -167,8 +227,8 @@ exports.bulkUpdateStatus = catchAsync(async (req, res) => {
   const emailsSent = [];
   const failedEmails = [];
 
-  // Send emails if requested
-  if (sendNotification && status === "delivered") {
+  // Send emails automatically when order is marked as delivered
+  if (status === "delivered") {
     console.log(`📧 Sending delivery notifications to ${updatedOrders.length} customers...`);
 
     try {
