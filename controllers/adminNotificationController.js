@@ -12,20 +12,27 @@ exports.listNotifications = catchAsync(async (req, res) => {
   const pageNum = Math.max(parseInt(page, 10) || 1, 1);
   const limitNum = Math.max(parseInt(limit, 10) || 20, 1);
 
-  const [notifications, total] = await Promise.all([
+  const [notifications, total, unreadCount] = await Promise.all([
     Notification.find(filter)
       .sort({ createdAt: -1 })
       .skip((pageNum - 1) * limitNum)
       .limit(limitNum),
     Notification.countDocuments(filter),
+    Notification.countDocuments({ read: false }),
   ]);
+
+  const totalPages = Math.max(Math.ceil(total / limitNum), 1);
 
   res.status(200).json({
     success: true,
     notifications,
-    total,
-    page: pageNum,
-    totalPages: Math.max(Math.ceil(total / limitNum), 1),
+    pagination: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      pages: totalPages,
+    },
+    unreadCount,
   });
 });
 
