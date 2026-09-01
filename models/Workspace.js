@@ -18,6 +18,7 @@ const workspaceSchema = new mongoose.Schema(
       lastName: { type: String, trim: true },
       email: { type: String, lowercase: true, trim: true },
       phone: { type: String, trim: true },
+      countryCode: { type: String, trim: true }, // e.g., "+91", "+44"
     },
     status: {
       type: String,

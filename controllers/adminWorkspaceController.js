@@ -37,6 +37,7 @@ exports.listWorkspaces = catchAsync(async (req, res) => {
     lastName: w.contact?.lastName,
     email: w.contact?.email,
     phone: w.contact?.phone,
+    countryCode: w.contact?.countryCode,
     totalUsers: userCountMap[w.code] || 0,
     totalOrders: orderCountMap[w.code] || 0,
     createdAt: w.createdAt,
