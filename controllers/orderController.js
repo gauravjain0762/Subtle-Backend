@@ -126,6 +126,112 @@ exports.createOrder = catchAsync(async (req, res) => {
     },
   });
 
+  // Send admin email notification for new order
+  try {
+    const nodemailer = require("nodemailer");
+    const adminEmail = process.env.ADMIN_NOTIFY_EMAIL;
+
+    if (adminEmail) {
+      const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+
+      const userName = `${req.user.firstName || ""} ${req.user.lastName || ""}`.trim() || req.user.email;
+      const userEmail = req.user.email || "N/A";
+
+      // Build meal details table rows
+      const mealRows = orderItems.map(item => `
+        <tr style="border-bottom: 1px solid #e0e0e0;">
+          <td style="padding: 10px; text-align: left;">${item.dishName}</td>
+          <td style="padding: 10px; text-align: center;">${item.qty}</td>
+          <td style="padding: 10px; text-align: right;">£${item.unitPrice.toFixed(2)}</td>
+          <td style="padding: 10px; text-align: right;">£${(item.unitPrice * item.qty).toFixed(2)}</td>
+        </tr>
+      `).join('');
+
+      const planTypeText = planType === "one-time" ? "Single Order" : planType === "weekly" ? "Weekly Plan" : "One-Off Plan";
+
+      const emailHTML = `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+          <div style="border-left: 4px solid #2196F3; padding-left: 15px; margin-bottom: 20px;">
+            <h2 style="margin: 0; color: #2196F3;">📦 New Order Placed</h2>
+            <p style="margin: 5px 0; font-size: 14px; color: #666;">Order from ${workspace.name}</p>
+          </div>
+
+          <div style="border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; background: #f5f5f5;">
+            <h3 style="margin-top: 0;">CUSTOMER DETAILS</h3>
+            <p><strong>Name:</strong> ${userName}</p>
+            <p><strong>Email:</strong> ${userEmail}</p>
+            <p><strong>Company Code:</strong> ${workspace.code}</p>
+          </div>
+
+          <div style="border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; background: #f5f5f5;">
+            <h3 style="margin-top: 0;">ORDER DETAILS</h3>
+            <p><strong>Order Number:</strong> ${order.orderNumber}</p>
+            <p><strong>Delivery Date:</strong> ${new Date(deliveryDate).toLocaleDateString()}</p>
+            <p><strong>Delivery Time:</strong> ${lunchTime}</p>
+            <p><strong>Payment Method:</strong> ${paymentMethod || "card"}</p>
+            <p><strong>Payment Status:</strong> ${paid ? "✅ Paid" : "⏳ Pending"}</p>
+          </div>
+
+          <div style="border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; background: #f5f5f5;">
+            <h3 style="margin-top: 0;">MEAL DETAILS</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <thead>
+                <tr style="background-color: #f0f0f0; border-bottom: 2px solid #2196F3;">
+                  <th style="padding: 10px; text-align: left;">Dish Name</th>
+                  <th style="padding: 10px; text-align: center;">Quantity</th>
+                  <th style="padding: 10px; text-align: right;">Unit Price</th>
+                  <th style="padding: 10px; text-align: right;">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${mealRows}
+                <tr style="background-color: #f9f9f9; font-weight: bold; border-top: 2px solid #2196F3;">
+                  <td colspan="3" style="padding: 10px; text-align: right;">Subtotal:</td>
+                  <td style="padding: 10px; text-align: right;">£${subtotal.toFixed(2)}</td>
+                </tr>
+                ${discount > 0 ? `
+                <tr style="background-color: #f9f9f9; font-weight: bold;">
+                  <td colspan="3" style="padding: 10px; text-align: right;">Discount (${appliedPromoCode || 'Promo'}):</td>
+                  <td style="padding: 10px; text-align: right; color: #4caf50;">-£${discount.toFixed(2)}</td>
+                </tr>
+                ` : ''}
+                <tr style="background-color: #e8f5e9; font-weight: bold; border-top: 2px solid #2196F3;">
+                  <td colspan="3" style="padding: 10px; text-align: right; color: #2196F3;">TOTAL:</td>
+                  <td style="padding: 10px; text-align: right; color: #2196F3; font-size: 16px;">£${total.toFixed(2)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; background: #f5f5f5;">
+            <h3 style="margin-top: 0;">ORDER TYPE</h3>
+            <p><strong>Plan Type:</strong> ${planTypeText}</p>
+            <p><strong>Workspace:</strong> ${workspace.name}</p>
+          </div>
+
+          <p style="color: #666; font-size: 12px; margin-top: 20px;">This is an automated notification from Subtle Kitchen admin system.</p>
+        </div>
+      `;
+
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: adminEmail,
+        subject: `📦 NEW ORDER: ${order.orderNumber} - ${userName} (${workspace.name})`,
+        html: emailHTML,
+      });
+
+      console.log(`✅ Admin email sent for order ${order.orderNumber}`);
+    }
+  } catch (emailError) {
+    console.error(`⚠️ Failed to send admin email for order ${order.orderNumber}:`, emailError.message);
+  }
+
   await Cart.deleteOne({ user: req.user._id });
 
   if (useStripeCheckout) {
