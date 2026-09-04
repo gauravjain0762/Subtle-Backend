@@ -49,19 +49,111 @@ exports.createOrder = catchAsync(async (req, res) => {
     throw new AppError("Workspace code is not active", 400);
   }
 
-  const { orderItems, subtotal, discount, appliedPromoCode, total } = await calculateOrderPricing({
-    workspaceCode,
-    deliveryDate,
-    items,
-    promoCode,
-  });
+  // For gym premises, skip menu date restrictions - allow any available dish
+  let orderItems, subtotal, discount, appliedPromoCode, total;
+
+  if (workspace.premiseType === "Gym") {
+    // Gym orders: validate dishes exist but don't enforce menu date restrictions
+    const Dish = require("../models/Dish");
+    let subtotalAmount = 0;
+    const processedItems = [];
+
+    for (const item of items) {
+      const dish = await Dish.findById(item.dishId);
+      if (!dish) {
+        throw new AppError(`Dish not found: ${item.dishId}`, 400);
+      }
+
+      if (!dish.available) {
+        throw new AppError(`Dish ${dish.name} is not available`, 400);
+      }
+
+      const qty = Number(item.qty) > 0 ? Number(item.qty) : 1;
+      let portionSize = null;
+      let unitPrice;
+
+      if (Array.isArray(dish.portions) && dish.portions.length > 0) {
+        const matchedPortion = item.portionSize
+          ? dish.portions.find((p) => p.size.toLowerCase() === String(item.portionSize).toLowerCase())
+          : dish.portions[0];
+
+        if (!matchedPortion) {
+          throw new AppError(`Invalid portion size: ${item.portionSize}`, 400);
+        }
+
+        portionSize = matchedPortion.size;
+        unitPrice = Number(matchedPortion.price);
+      } else {
+        unitPrice = Number(dish.price);
+      }
+
+      if (Number.isNaN(unitPrice)) {
+        throw new AppError(`Dish ${dish.name} has an invalid price`, 400);
+      }
+
+      const rawAddons = Array.isArray(item.addons) ? item.addons : [];
+      const addonNames = rawAddons.map((addon) => (typeof addon === "string" ? addon : addon?.name));
+      const addonsWithPrices = [];
+
+      addonNames.forEach((addonName) => {
+        const ingredient = (dish.ingredients || []).find((i) => i.name === addonName);
+        if (!ingredient || ingredient.price === undefined || ingredient.price === null || ingredient.price === "") {
+          throw new AppError(`Invalid addon: ${addonName}`, 400);
+        }
+
+        const addonPrice = Number(ingredient.price);
+        if (Number.isNaN(addonPrice)) {
+          throw new AppError(`Addon ${addonName} has an invalid price`, 400);
+        }
+
+        addonsWithPrices.push({
+          name: addonName,
+          price: addonPrice,
+          qty: 1,
+        });
+
+        unitPrice += addonPrice;
+      });
+
+      subtotalAmount += unitPrice * qty;
+
+      processedItems.push({
+        dishId: dish._id,
+        dishName: dish.name,
+        portionSize,
+        qty,
+        addons: addonsWithPrices,
+        unitPrice,
+        images: dish.images,
+      });
+    }
+
+    orderItems = processedItems;
+    subtotal = Math.round(subtotalAmount * 100) / 100;
+    total = subtotal;
+    discount = null;
+    appliedPromoCode = null;
+  } else {
+    // Regular orders: use standard pricing with menu date restrictions
+    const result = await calculateOrderPricing({
+      workspaceCode,
+      deliveryDate,
+      items,
+      promoCode,
+    });
+    orderItems = result.orderItems;
+    subtotal = result.subtotal;
+    discount = result.discount;
+    appliedPromoCode = result.appliedPromoCode;
+    total = result.total;
+  }
 
   if (paymentMethod && !["card", "apple_pay", "google_pay", "subscription"].includes(paymentMethod)) {
     throw new AppError("Invalid payment method", 400);
   }
 
-  if (planType && !["one-time", "weekly", "one-off"].includes(planType)) {
-    throw new AppError("Invalid planType. Must be 'one-time', 'weekly', or 'one-off'", 400);
+  if (planType && !["one-time", "weekly", "one-off", "gym-bulk"].includes(planType)) {
+    throw new AppError("Invalid planType. Must be 'one-time', 'weekly', 'one-off', or 'gym-bulk'", 400);
   }
 
   let paid = false;
