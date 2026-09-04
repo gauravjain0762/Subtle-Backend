@@ -301,11 +301,13 @@ exports.getOrderBySession = catchAsync(async (req, res) => {
   res.status(200).json({
     success: true,
     order: {
-      _id: orderData._id,
+      id: orderData._id,
       orderRef: orderData.orderRef,
       orderNumber: orderData.orderNumber,
+      type: orderData.planType,
+      status: orderData.status || "completed",
       deliveryDate: orderData.deliveryDate,
-      lunchTime: orderData.lunchTime,
+      deliveryTime: orderData.lunchTime,
       total: orderData.total,
       subtotal: orderData.subtotal,
       discount: orderData.discount,
@@ -419,3 +421,223 @@ async function createOneOffRecurringOrders(order) {
     console.error("Error creating one-off recurring orders:", error);
   }
 }
+
+exports.createGymBulkOrder = catchAsync(async (req, res) => {
+  const {
+    workspaceCode,
+    deliveryDate,
+    lunchTime,
+    meals,
+  } = req.body || {};
+
+  if (!workspaceCode || !deliveryDate || !lunchTime || !Array.isArray(meals) || meals.length === 0) {
+    throw new AppError("Missing required order fields: workspaceCode, deliveryDate, lunchTime, meals", 400);
+  }
+
+  // Validate minimum 5 meals
+  const totalQty = meals.reduce((sum, meal) => sum + (meal.qty || 0), 0);
+  if (totalQty < 5) {
+    throw new AppError("Minimum 5 meals required for gym bulk orders", 400);
+  }
+
+  const workspace = await Workspace.findOne({ code: workspaceCode.trim().toUpperCase(), status: "active" });
+  if (!workspace) {
+    throw new AppError("Workspace code is not active", 400);
+  }
+
+  // Validate workspace is a gym
+  if (workspace.premiseType !== "Gym") {
+    throw new AppError("This workspace is not a gym", 400);
+  }
+
+  // Calculate total and prepare items
+  let subtotal = 0;
+  const orderItems = [];
+
+  for (const meal of meals) {
+    if (!meal.dishId || !meal.dishName || !meal.qty || meal.qty < 1 || !meal.price) {
+      throw new AppError("Invalid meal data: each meal must have dishId, dishName, qty, and price", 400);
+    }
+
+    const mealTotal = meal.price * meal.qty;
+    subtotal += mealTotal;
+
+    orderItems.push({
+      dishId: meal.dishId,
+      dishName: meal.dishName,
+      portionSize: meal.portion || "Regular",
+      qty: meal.qty,
+      addons: meal.addons || [],
+      unitPrice: meal.price,
+      images: [],
+    });
+  }
+
+  const dateStr = deliveryDate.replace(/-/g, "");
+  const orderRef = await generateDailyRef(Order, "orderRef", "GYM", dateStr);
+  const orderNumber = `ORD-${await getNextSequence("orderNumber")}`;
+
+  const order = await Order.create({
+    orderRef,
+    orderNumber,
+    user: req.user._id,
+    workspace: workspace._id,
+    workspaceCode: workspace.code,
+    workspaceName: workspace.name,
+    deliveryDate,
+    lunchTime,
+    items: orderItems,
+    subtotal,
+    discount: null,
+    total: subtotal,
+    planType: "gym-bulk",
+    paymentMethod: "card",
+    paid: false,
+  });
+
+  console.log(`✅ Created gym bulk order ${orderNumber} for ${workspace.name}`);
+
+  // Create notification for admin
+  await Notification.create({
+    type: "new_order",
+    title: "New Gym Bulk Order",
+    message: `Gym bulk order ${orderNumber} from ${workspace.name} - ${totalQty} meals - £${subtotal.toFixed(2)}`,
+    data: {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      orderTotal: subtotal,
+      planType: "gym-bulk",
+      workspaceName: workspace.name,
+    },
+  });
+
+  // Create Stripe checkout session
+  const redirectUrl = process.env.NODE_ENV === "production"
+    ? process.env.FRONTEND_URL
+    : "http://localhost:3000";
+
+  const session = await getStripe().checkout.sessions.create({
+    payment_method_types: ["card"],
+    mode: "payment",
+    currency: "gbp",
+    customer_email: req.user.email,
+    line_items: [
+      {
+        price_data: {
+          currency: "gbp",
+          product_data: { name: `Subtle Kitchen gym bulk order ${orderNumber}` },
+          unit_amount: Math.round(subtotal * 100),
+        },
+        quantity: 1,
+      },
+    ],
+    success_url: `${redirectUrl}/confirmation?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${redirectUrl}/gym-orders`,
+    metadata: { orderId: order._id.toString(), userId: req.user._id.toString(), type: "gym-bulk" },
+    locale: "en",
+  });
+
+  order.checkoutSessionId = session.id;
+  await order.save();
+
+  // Send admin email notification for gym bulk order
+  try {
+    const nodemailer = require("nodemailer");
+    const adminEmail = process.env.ADMIN_NOTIFY_EMAIL;
+
+    if (adminEmail) {
+      const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+
+      const userName = `${req.user.firstName || ""} ${req.user.lastName || ""}`.trim() || req.user.email;
+      const userEmail = req.user.email || "N/A";
+
+      // Build meal details table rows
+      const mealRows = orderItems.map(item => `
+        <tr style="border-bottom: 1px solid #e0e0e0;">
+          <td style="padding: 10px; text-align: left;">${item.dishName}</td>
+          <td style="padding: 10px; text-align: center;">${item.qty}</td>
+          <td style="padding: 10px; text-align: right;">£${item.unitPrice.toFixed(2)}</td>
+          <td style="padding: 10px; text-align: right;">£${(item.unitPrice * item.qty).toFixed(2)}</td>
+        </tr>
+      `).join('');
+
+      const emailHTML = `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+          <div style="border-left: 4px solid #FF9800; padding-left: 15px; margin-bottom: 20px;">
+            <h2 style="margin: 0; color: #FF9800;">🏋️ New Gym Bulk Order</h2>
+            <p style="margin: 5px 0; font-size: 14px; color: #666;">Gym order with ${totalQty} meals</p>
+          </div>
+
+          <div style="border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; background: #f5f5f5;">
+            <h3 style="margin-top: 0;">GYM DETAILS</h3>
+            <p><strong>Gym Name:</strong> ${workspace.name}</p>
+            <p><strong>Gym Code:</strong> ${workspace.code}</p>
+            <p><strong>Contact Person:</strong> ${userName}</p>
+            <p><strong>Email:</strong> ${userEmail}</p>
+          </div>
+
+          <div style="border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; background: #f5f5f5;">
+            <h3 style="margin-top: 0;">ORDER DETAILS</h3>
+            <p><strong>Order Number:</strong> ${order.orderNumber}</p>
+            <p><strong>Delivery Date:</strong> ${new Date(deliveryDate).toLocaleDateString()}</p>
+            <p><strong>Delivery Time:</strong> ${lunchTime}</p>
+            <p><strong>Total Meals:</strong> ${totalQty}</p>
+            <p><strong>Payment Status:</strong> ⏳ Pending Payment</p>
+          </div>
+
+          <div style="border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; background: #f5f5f5;">
+            <h3 style="margin-top: 0;">MEAL DETAILS</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <thead>
+                <tr style="background-color: #f0f0f0; border-bottom: 2px solid #FF9800;">
+                  <th style="padding: 10px; text-align: left;">Dish Name</th>
+                  <th style="padding: 10px; text-align: center;">Quantity</th>
+                  <th style="padding: 10px; text-align: right;">Unit Price</th>
+                  <th style="padding: 10px; text-align: right;">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${mealRows}
+                <tr style="background-color: #fff3e0; font-weight: bold; border-top: 2px solid #FF9800;">
+                  <td colspan="3" style="padding: 10px; text-align: right; color: #FF9800;">TOTAL:</td>
+                  <td style="padding: 10px; text-align: right; color: #FF9800; font-size: 16px;">£${subtotal.toFixed(2)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p style="color: #666; font-size: 12px; margin-top: 20px;">This is an automated notification from Subtle Kitchen admin system.</p>
+        </div>
+      `;
+
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: adminEmail,
+        subject: `🏋️ NEW GYM BULK ORDER: ${order.orderNumber} - ${workspace.name} (${totalQty} meals)`,
+        html: emailHTML,
+      });
+
+      console.log(`✅ Admin email sent for gym bulk order ${order.orderNumber}`);
+    }
+  } catch (emailError) {
+    console.error(`⚠️ Failed to send admin email for gym bulk order ${order.orderNumber}:`, emailError.message);
+  }
+
+  res.status(201).json({
+    success: true,
+    order: {
+      id: order._id,
+      orderNumber: order.orderNumber,
+      type: "gym-bulk",
+      total: subtotal,
+    },
+    checkoutUrl: session.url,
+    sessionId: session.id,
+  });
+});

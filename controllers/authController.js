@@ -53,14 +53,18 @@ exports.register = catchAsync(async (req, res) => {
     workspaceCounty: workspace.county,
     workspacePostcode: workspace.postcode,
     workspaceDeliveryTimes: workspace.deliveryTimes,
+    premiseType: workspace.premiseType,
   });
 
   const token = generateToken(user._id);
 
+  const userObj = user.toObject();
+  userObj.premiseType = workspace.premiseType;
+
   res.status(201).json({
     success: true,
     token,
-    user,
+    user: userObj,
   });
 });
 
@@ -84,10 +88,16 @@ exports.login = catchAsync(async (req, res) => {
 
   const token = generateToken(user._id);
 
+  const userObj = user.toObject();
+  const workspace = await Workspace.findOne({ code: user.workspaceCode });
+  if (workspace) {
+    userObj.premiseType = workspace.premiseType;
+  }
+
   res.status(200).json({
     success: true,
     token,
-    user,
+    user: userObj,
   });
 });
 

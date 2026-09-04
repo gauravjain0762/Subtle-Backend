@@ -48,7 +48,7 @@ const orderSchema = new mongoose.Schema(
     promoCode: { type: String, uppercase: true, trim: true },
     discount: discountSchema,
     total: { type: Number, required: true },
-    planType: { type: String, enum: ["one-time", "weekly", "one-off"], default: "one-time" },
+    planType: { type: String, enum: ["one-time", "weekly", "one-off", "gym-bulk"], default: "one-time" },
     paymentMethod: { type: String, enum: ["card", "apple_pay", "google_pay", "subscription"], default: "card" },
     paymentIntentId: { type: String },
     checkoutSessionId: { type: String },
