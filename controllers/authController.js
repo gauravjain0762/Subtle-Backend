@@ -102,9 +102,15 @@ exports.login = catchAsync(async (req, res) => {
 });
 
 exports.getMe = catchAsync(async (req, res) => {
+  const userObj = req.user.toObject ? req.user.toObject() : req.user;
+  const workspace = await Workspace.findOne({ code: req.user.workspaceCode });
+  if (workspace) {
+    userObj.premiseType = workspace.premiseType;
+  }
+
   res.status(200).json({
     success: true,
-    user: req.user,
+    user: userObj,
   });
 });
 
