@@ -1067,3 +1067,132 @@ exports.resumeSubscription = catchAsync(async (req, res) => {
     subscription,
   });
 });
+
+// Test endpoint: Generate a test order for recurring payment testing
+exports.generateTestOrder = catchAsync(async (req, res) => {
+  const subscription = await Subscription.findOne({ user: req.user._id }).populate("plan").populate("user", "firstName lastName email");
+
+  if (!subscription) {
+    throw new AppError("No subscription found", 404);
+  }
+
+  if (subscription.status !== "active") {
+    throw new AppError("Subscription is not active", 400);
+  }
+
+  // Import dependencies
+  const Order = require("../models/Order");
+  const Workspace = require("../models/Workspace");
+  const { generateDailyRef } = require("../utils/generateRef");
+  const getNextSequence = require("../utils/getNextSequence");
+  const Notification = require("../models/Notification");
+
+  try {
+    // Use today's date for test order delivery
+    const deliveryDate = new Date().toISOString().split("T")[0];
+
+    // Get workspace info
+    let workspaceId = subscription.workspace;
+    let workspaceCode = subscription.workspaceCode;
+    let workspaceName = subscription.workspaceName;
+
+    if (!workspaceCode && subscription.user && subscription.user.workspaceCode) {
+      const workspace = await Workspace.findOne({ code: subscription.user.workspaceCode.toUpperCase() });
+      if (workspace) {
+        workspaceId = workspace._id;
+        workspaceCode = workspace.code;
+        workspaceName = workspace.name;
+      }
+    }
+
+    if (!workspaceCode || !workspaceId) {
+      throw new AppError("Workspace information not found", 400);
+    }
+
+    // Create test order
+    const dateStr = deliveryDate.replace(/-/g, "");
+    const orderRef = await generateDailyRef(Order, "orderRef", "TST", dateStr);
+    const orderNumber = `ORD-${await getNextSequence("orderNumber")}`;
+
+    const items = subscription.items || [];
+    if (items.length === 0) {
+      throw new AppError("Subscription has no items", 400);
+    }
+
+    const item = items[0];
+    const mealPrice = Number(item.mealPrice) || 0;
+    const quantity = item.quantity || 1;
+    const totalPrice = mealPrice * quantity;
+
+    // Fetch meal details
+    const dish = await Dish.findById(item.mealId);
+    if (!dish) {
+      throw new AppError("Meal not found", 400);
+    }
+
+    const order = await Order.create({
+      orderRef,
+      orderNumber,
+      user: subscription.user._id || subscription.user,
+      subscription: subscription._id,
+      workspace: workspaceId,
+      workspaceCode: workspaceCode,
+      workspaceName: workspaceName,
+      deliveryDate,
+      lunchTime: "12:00 PM",
+      items: [
+        {
+          dishId: dish._id,
+          dishName: dish.name,
+          portionSize: "Regular",
+          qty: quantity,
+          addons: [],
+          unitPrice: mealPrice,
+          images: dish.images || [],
+        },
+      ],
+      subtotal: totalPrice,
+      total: totalPrice,
+      planType: subscription.plan.type,
+      paymentMethod: "subscription",
+      paid: true,
+      status: "new",
+    });
+
+    // Create admin notification
+    await Notification.create({
+      type: "order_generated",
+      title: `Test Order Generated - ${subscription.user.firstName}`,
+      message: `TEST order ${orderNumber} for ${deliveryDate}: ${dish.name}`,
+      data: {
+        orderId: order._id,
+        orderNumber: orderNumber,
+        subscriptionId: subscription._id,
+        userId: subscription.user._id || subscription.user,
+        customerName: `${subscription.user.firstName} ${subscription.user.lastName}`,
+        contactEmail: subscription.user.email,
+        orderTotal: totalPrice,
+        planType: subscription.plan.type,
+        planName: subscription.plan.name,
+      },
+      read: false,
+    });
+
+    console.log(`✅ Test order created: ${orderNumber} for subscription testing`);
+
+    res.status(201).json({
+      success: true,
+      message: "Test order generated successfully",
+      order: {
+        orderNumber: order.orderNumber,
+        deliveryDate: order.deliveryDate,
+        total: order.total,
+        dish: dish.name,
+        quantity,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error generating test order:", error.message);
+    throw error;
+  }
+});

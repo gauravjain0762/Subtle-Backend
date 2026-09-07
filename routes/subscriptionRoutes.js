@@ -11,6 +11,7 @@ const {
   pauseSubscription,
   resumeSubscription,
   cancelSubscription,
+  generateTestOrder,
 } = require("../controllers/userSubscriptionsController");
 
 const router = express.Router();
@@ -28,5 +29,6 @@ router.patch("/my", updateSubscription);
 router.delete("/my", cancelSubscription);
 router.post("/pause", pauseSubscription);
 router.post("/resume", resumeSubscription);
+router.post("/test-order", generateTestOrder);
 
 module.exports = router;
