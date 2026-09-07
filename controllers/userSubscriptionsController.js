@@ -370,10 +370,12 @@ exports.verifyCheckoutSession = catchAsync(async (req, res) => {
     pattern = selectedPattern.days;
   }
 
-  // Calculate next charge date
+  // Calculate next charge date (1 day before next delivery cycle)
+  // For Mon-Fri delivery: charge on Sat (6 days after Mon start)
+  // This gives admin 1 day to prepare before next Mon-Fri delivery
   const start = new Date(startDate);
   const nextChargeDate = new Date(start);
-  nextChargeDate.setDate(nextChargeDate.getDate() + 7);
+  nextChargeDate.setDate(nextChargeDate.getDate() + 6);
 
   // Get workspace info from user
   const Workspace = require("../models/Workspace");
