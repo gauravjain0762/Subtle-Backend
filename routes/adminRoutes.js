@@ -68,6 +68,10 @@ const {
   getBillingReport,
 } = require("../controllers/adminSubscriptionsController");
 const {
+  getDashboardMetrics,
+  getMetricsComparison,
+} = require("../controllers/adminDashboardController");
+const {
   listNotifications,
   getNotification,
   markAsRead,
@@ -81,6 +85,9 @@ const router = express.Router();
 router.post("/auth/login", login);
 
 router.use(adminProtect);
+
+router.get("/dashboard/metrics", getDashboardMetrics);
+router.get("/dashboard/metrics/comparison", getMetricsComparison);
 
 router.get("/workspace-requests", listWorkspaceRequests);
 router.post("/workspace-requests/:id/approve", approveWorkspaceRequest);
