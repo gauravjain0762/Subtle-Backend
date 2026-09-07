@@ -1162,7 +1162,7 @@ exports.generateTestOrder = catchAsync(async (req, res) => {
     // Charge Stripe for test order
     let stripeChargeId = null;
     try {
-      const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+      const stripe = getStripe();
 
       // Get the latest billing history entry to retrieve the payment intent
       const billingHistory = subscription.billingHistory || [];
