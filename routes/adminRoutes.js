@@ -140,10 +140,10 @@ router.get("/subscription-orders", listSubscriptionOrders);
 router.get("/billing/report", getBillingReport);
 
 router.get("/notifications/unread-count", getUnreadCount);
+router.patch("/notifications/mark-all/read", markAllAsRead);
 router.get("/notifications", listNotifications);
 router.get("/notifications/:id", getNotification);
 router.patch("/notifications/:id/read", markAsRead);
-router.patch("/notifications/mark-all/read", markAllAsRead);
 router.delete("/notifications/:id", deleteNotification);
 
 module.exports = router;
