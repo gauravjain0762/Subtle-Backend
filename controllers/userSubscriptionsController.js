@@ -1159,37 +1159,17 @@ exports.generateTestOrder = catchAsync(async (req, res) => {
       status: "new",
     });
 
-    // Charge Stripe for test order
+    // Charge Stripe for test order (using test card for testing)
     let stripeChargeId = null;
     try {
       const stripe = getStripe();
 
-      // Get the latest billing history entry to retrieve the payment intent
-      const billingHistory = subscription.billingHistory || [];
-      if (billingHistory.length === 0) {
-        throw new AppError("No billing history found for subscription", 400);
-      }
-
-      // Get the latest Stripe charge ID to retrieve payment method
-      const lastCharge = billingHistory[billingHistory.length - 1];
-      const lastStripeChargeId = lastCharge.stripeChargeId;
-
-      if (!lastStripeChargeId) {
-        throw new AppError("No Stripe charge ID found in billing history", 400);
-      }
-
-      // Retrieve the original charge to get payment method
-      const originalCharge = await stripe.charges.retrieve(lastStripeChargeId);
-
-      if (!originalCharge.payment_method) {
-        throw new AppError("Payment method not found in original charge", 400);
-      }
-
-      // Create a new charge using the same payment method
+      // For test orders, use test card directly (4242 4242 4242 4242)
+      // This simulates recurring charge without needing stored payment method
       const charge = await stripe.charges.create({
-        amount: Math.round(totalPrice * 100),
+        amount: Math.round(totalPrice * 100), // Amount in cents
         currency: "gbp",
-        source: originalCharge.source.id,
+        source: "tok_visa", // Stripe test token for visa
         description: `Subtle Kitchen test order ${orderNumber} for subscription`,
         metadata: {
           orderId: order._id.toString(),
