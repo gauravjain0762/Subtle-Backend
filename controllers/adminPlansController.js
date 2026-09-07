@@ -108,6 +108,30 @@ exports.deletePlan = catchAsync(async (req, res) => {
   res.status(200).json({ success: true, message: "Plan deactivated" });
 });
 
+exports.deletePlanPermanently = catchAsync(async (req, res) => {
+  const plan = await Plan.findById(req.params.id);
+
+  if (!plan) {
+    throw new AppError("Plan not found", 404);
+  }
+
+  const activeSubscriptions = await Subscription.countDocuments({
+    plan: req.params.id,
+    status: "active",
+  });
+
+  if (activeSubscriptions > 0) {
+    throw new AppError(
+      `Cannot permanently delete plan. ${activeSubscriptions} active subscription(s) exist. Deactivate first or cancel subscriptions.`,
+      400
+    );
+  }
+
+  await Plan.findByIdAndDelete(req.params.id);
+
+  res.status(200).json({ success: true, message: "Plan permanently deleted" });
+});
+
 // Get subscribers of a specific plan
 exports.getPlanSubscribers = catchAsync(async (req, res) => {
   const { planId } = req.params;

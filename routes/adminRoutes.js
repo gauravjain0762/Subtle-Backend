@@ -59,6 +59,7 @@ const {
   getPlan,
   updatePlan,
   deletePlan,
+  deletePlanPermanently,
   getPlanSubscribers,
 } = require("../controllers/adminPlansController");
 const {
@@ -136,6 +137,7 @@ router.post("/stripe/configure", configureStripeKeys);
 
 router.post("/plans", createPlan);
 router.get("/plans", listPlans);
+router.delete("/plans/:id/permanently", deletePlanPermanently);
 router.get("/plans/:id", getPlan);
 router.get("/plans/:planId/subscribers", getPlanSubscribers);
 router.patch("/plans/:id", updatePlan);
