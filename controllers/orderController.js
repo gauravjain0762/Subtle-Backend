@@ -424,9 +424,31 @@ exports.getMyOrders = catchAsync(async (req, res) => {
     Order.countDocuments({ user: req.user._id }),
   ]);
 
+  // Format orders for consistent response
+  const formattedOrders = orders.map(order => {
+    const orderData = order.toObject();
+    return {
+      id: orderData._id,
+      orderRef: orderData.orderRef,
+      orderNumber: orderData.orderNumber,
+      type: orderData.planType,
+      status: orderData.status || "new",
+      deliveryDate: orderData.deliveryDate,
+      deliveryTime: orderData.lunchTime,
+      items: orderData.items,
+      total: orderData.total,
+      subtotal: orderData.subtotal,
+      discount: orderData.discount,
+      workspaceCode: orderData.workspaceCode,
+      workspaceName: orderData.workspaceName,
+      paid: orderData.paid,
+      createdAt: orderData.createdAt,
+    };
+  });
+
   res.status(200).json({
     success: true,
-    orders,
+    orders: formattedOrders,
     pagination: {
       page,
       limit,
