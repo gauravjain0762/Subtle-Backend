@@ -1159,6 +1159,63 @@ exports.generateTestOrder = catchAsync(async (req, res) => {
       status: "new",
     });
 
+    // Charge Stripe for test order
+    let stripeChargeId = null;
+    try {
+      const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
+      // Get the latest billing history entry to retrieve the payment intent
+      const billingHistory = subscription.billingHistory || [];
+      if (billingHistory.length === 0) {
+        throw new AppError("No billing history found for subscription", 400);
+      }
+
+      // Get the latest Stripe charge ID to retrieve payment method
+      const lastCharge = billingHistory[billingHistory.length - 1];
+      const lastStripeChargeId = lastCharge.stripeChargeId;
+
+      if (!lastStripeChargeId) {
+        throw new AppError("No Stripe charge ID found in billing history", 400);
+      }
+
+      // Retrieve the original charge to get payment method
+      const originalCharge = await stripe.charges.retrieve(lastStripeChargeId);
+
+      if (!originalCharge.payment_method) {
+        throw new AppError("Payment method not found in original charge", 400);
+      }
+
+      // Create a new charge using the same payment method
+      const charge = await stripe.charges.create({
+        amount: Math.round(totalPrice * 100),
+        currency: "gbp",
+        source: originalCharge.source.id,
+        description: `Subtle Kitchen test order ${orderNumber} for subscription`,
+        metadata: {
+          orderId: order._id.toString(),
+          orderNumber: orderNumber,
+          subscriptionId: subscription._id.toString(),
+          testOrder: "true",
+        },
+      });
+
+      stripeChargeId = charge.id;
+
+      // Update subscription billing history with new charge
+      subscription.billingHistory.push({
+        date: new Date(),
+        amount: totalPrice,
+        status: "succeeded",
+        stripeChargeId: stripeChargeId,
+      });
+
+      await subscription.save();
+
+      console.log(`✅ Stripe charge created: ${stripeChargeId} for amount £${totalPrice}`);
+    } catch (stripeError) {
+      console.error(`⚠️ Failed to charge Stripe for test order: ${stripeError.message}`);
+    }
+
     // Create admin notification
     await Notification.create({
       type: "order_generated",
@@ -1189,6 +1246,8 @@ exports.generateTestOrder = catchAsync(async (req, res) => {
         total: order.total,
         dish: dish.name,
         quantity,
+        stripeCharged: stripeChargeId ? true : false,
+        stripeChargeId: stripeChargeId,
       },
     });
   } catch (error) {
