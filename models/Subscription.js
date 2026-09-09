@@ -1,5 +1,15 @@
 const mongoose = require("mongoose");
 
+const discountSchema = new mongoose.Schema(
+  {
+    type: { type: String, enum: ["percentage", "fixed"] },
+    value: Number,
+    amount: Number,
+    label: String,
+  },
+  { _id: false }
+);
+
 const billingHistorySchema = new mongoose.Schema(
   {
     date: { type: Date, default: Date.now },
@@ -42,6 +52,8 @@ const subscriptionSchema = new mongoose.Schema(
     billingHistory: { type: [billingHistorySchema], default: [] },
     lastOrderGenerationDate: { type: Date },
     isRecurring: { type: Boolean, default: true }, // NEW: Track if subscription auto-renews (defaults true for backwards compatibility)
+    promoCode: { type: String, uppercase: true, trim: true },
+    discount: discountSchema,
   },
   { timestamps: true }
 );

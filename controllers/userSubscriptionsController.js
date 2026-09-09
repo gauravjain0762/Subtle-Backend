@@ -2,9 +2,11 @@ const Plan = require("../models/Plan");
 const Subscription = require("../models/Subscription");
 const RecurringOrder = require("../models/RecurringOrder");
 const Dish = require("../models/Dish");
+const Workspace = require("../models/Workspace");
 const { getStripe } = require("../config/stripe");
 const AppError = require("../utils/appError");
 const catchAsync = require("../utils/catchAsync");
+const validatePromoCode = require("../utils/validatePromoCode");
 
 // Helper: Generate upcoming orders from subscription
 async function generateUpcomingOrdersArray(subscription) {
@@ -124,7 +126,7 @@ exports.getAvailablePlans = catchAsync(async (req, res) => {
 });
 
 exports.selectPlan = catchAsync(async (req, res) => {
-  const { planId, items, startDate, patternId, isRecurring = true } = req.body;
+  const { planId, items, startDate, patternId, isRecurring = true, promoCode } = req.body;
   const userId = req.user._id;
 
   // Validate required fields
@@ -237,9 +239,34 @@ exports.selectPlan = catchAsync(async (req, res) => {
   console.log(`📅 Delivery dates calculated for ${plan.type} plan: ${JSON.stringify(deliveryDates)}`);
 
   // Calculate total charge (sum of all items)
-  const totalCharge = items.reduce((sum, item) => sum + (item.mealPrice * item.quantity), 0);
+  const subtotal = items.reduce((sum, item) => sum + (item.mealPrice * item.quantity), 0);
+  let totalCharge = subtotal;
+  let discount = null;
+  let appliedPromoCode = null;
 
-  console.log(`💰 Charge calculation: £${totalCharge.toFixed(2)} (sum of ${items.length} meals)`);
+  // Validate and apply promo code if provided
+  if (promoCode) {
+    if (!req.user.workspaceCode) {
+      throw new AppError("Workspace code not found for user", 400);
+    }
+
+    const promoResult = await validatePromoCode(promoCode, req.user.workspaceCode);
+    if (!promoResult.valid) {
+      throw new AppError(promoResult.error, 400);
+    }
+
+    const { type, value, label } = promoResult.discount;
+    const rawAmount = type === "percentage" ? subtotal * (value / 100) : value;
+    const amount = Math.min(Math.round(rawAmount * 100) / 100, subtotal);
+
+    appliedPromoCode = promoResult.code;
+    discount = { type, value, amount, label };
+    totalCharge = Math.round((subtotal - amount) * 100) / 100;
+
+    console.log(`🎟️ Promo applied: ${appliedPromoCode} - Discount: £${amount.toFixed(2)}`);
+  }
+
+  console.log(`💰 Charge calculation: £${totalCharge.toFixed(2)} (subtotal: £${subtotal.toFixed(2)}, discount: ${discount ? '£' + discount.amount.toFixed(2) : 'none'})`);
 
   if (deliveryDates.length === 0) {
     throw new AppError("No delivery dates generated", 400);
@@ -256,28 +283,28 @@ exports.selectPlan = catchAsync(async (req, res) => {
     ? process.env.FRONTEND_URL || "https://subtlekitchen.co.uk"
     : "http://localhost:3000";
 
-  // Create line items for each meal
-  const lineItems = items.map((item, index) => ({
-    price_data: {
-      currency: "gbp",
-      product_data: {
-        name: `${plan.name} - Day ${index + 1}`,
-        description: `Delivery: ${deliveryDates[index].date}`,
-      },
-      unit_amount: Math.round(item.mealPrice * 100),
-    },
-    quantity: item.quantity,
-  }));
-
   // Serialize items array for metadata (Stripe has string limits)
   const itemsJson = JSON.stringify(items);
 
+  // Create Stripe checkout with final totalCharge (after discount)
   const checkoutSession = await stripe.checkout.sessions.create({
     payment_method_types: ["card"],
     mode: "payment",
     currency: "gbp",
     customer_email: req.user.email,
-    line_items: lineItems,
+    line_items: [
+      {
+        price_data: {
+          currency: "gbp",
+          product_data: {
+            name: `${plan.name} Subscription`,
+            description: `${deliveryDates.length} deliveries from ${deliveryDates[0]?.date}`,
+          },
+          unit_amount: Math.round(totalCharge * 100),
+        },
+        quantity: 1,
+      },
+    ],
     success_url: `${baseUrl}/confirmation?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${baseUrl}/subscription/review?cancelled=true`,
     metadata: {
@@ -286,7 +313,9 @@ exports.selectPlan = catchAsync(async (req, res) => {
       startDate: startDate,
       patternId: patternId || "none",
       items: itemsJson,
-      isRecurring: String(isRecurring), // Store as string (Stripe metadata limitation), convert boolean to string
+      isRecurring: String(isRecurring),
+      promoCode: appliedPromoCode || "none",
+      discount: discount ? JSON.stringify(discount) : "none",
     },
   });
 
@@ -295,6 +324,8 @@ exports.selectPlan = catchAsync(async (req, res) => {
   res.status(200).json({
     success: true,
     summary: {
+      subtotal: subtotal,
+      discount: discount?.amount || 0,
       totalCharge: totalCharge,
     },
     deliveryDates,
@@ -327,12 +358,22 @@ exports.verifyCheckoutSession = catchAsync(async (req, res) => {
   }
 
   // Extract metadata
-  const { planId, startDate, patternId, items: itemsJson, isRecurring: isRecurringStr } = session.metadata;
+  const { planId, startDate, patternId, items: itemsJson, isRecurring: isRecurringStr, promoCode, discount: discountJson } = session.metadata;
 
   // Parse isRecurring with backwards compatibility: default to true if missing
   // (sessions created before this field was added will not have it)
   const isRecurring = isRecurringStr === 'false' ? false : true;
   const items = JSON.parse(itemsJson);
+
+  // Parse discount if provided
+  let discount = null;
+  if (discountJson && discountJson !== "none") {
+    try {
+      discount = JSON.parse(discountJson);
+    } catch (e) {
+      console.warn(`⚠️ Failed to parse discount from metadata: ${discountJson}`);
+    }
+  }
 
   // Check if user already has an active subscription
   const existingSubscription = await Subscription.findOne({
@@ -395,7 +436,8 @@ exports.verifyCheckoutSession = catchAsync(async (req, res) => {
   }
 
   // Calculate total charge from items
-  const totalCharge = items.reduce((sum, item) => sum + (item.mealPrice * item.quantity), 0);
+  const subtotal = items.reduce((sum, item) => sum + (item.mealPrice * item.quantity), 0);
+  const totalCharge = discount ? subtotal - discount.amount : subtotal;
 
   // Create subscription
   const subscription = await Subscription.create({
@@ -410,6 +452,8 @@ exports.verifyCheckoutSession = catchAsync(async (req, res) => {
     startDate: start,
     nextChargeDate,
     isRecurring: isRecurring, // Store recurring flag (defaults to true if not provided)
+    promoCode: promoCode && promoCode !== "none" ? promoCode : null,
+    discount: discount || null,
     totalCharges: 1,
     billingHistory: [
       {
@@ -429,10 +473,11 @@ exports.verifyCheckoutSession = catchAsync(async (req, res) => {
     const userName = `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email;
     const itemsCount = subscription.items?.length || 0;
 
+    const promoText = promoCode && promoCode !== "none" ? ` (Promo: ${promoCode})` : "";
     await Notification.create({
       type: "new_subscription",
       title: `New Subscription - ${userName}`,
-      message: `${userName} subscribed to ${plan.name} (${itemsCount} meals). First charge: £${totalCharge.toFixed(2)}`,
+      message: `${userName} subscribed to ${plan.name} (${itemsCount} meals). First charge: £${totalCharge.toFixed(2)}${promoText}`,
       data: {
         subscriptionId: subscription._id,
         userId: subscription.user,
@@ -441,7 +486,10 @@ exports.verifyCheckoutSession = catchAsync(async (req, res) => {
         planName: plan.name,
         planType: plan.type,
         itemsCount: itemsCount,
+        subtotal: subtotal,
+        discount: discount ? discount.amount : null,
         totalCharge: totalCharge,
+        promoCode: promoCode && promoCode !== "none" ? promoCode : null,
         startDate: subscription.startDate,
       },
       read: false,
