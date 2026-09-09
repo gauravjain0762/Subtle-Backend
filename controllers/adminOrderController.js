@@ -77,6 +77,9 @@ exports.listOrders = catchAsync(async (req, res) => {
 
   const filter = {};
 
+  // Only show paid orders to admin (critical: unpaid orders shouldn't be prepared)
+  filter.paid = true;
+
   if (status) filter.status = status;
   if (type) filter.planType = type;
   if (workspaceId) filter.workspace = workspaceId;
