@@ -133,6 +133,23 @@ exports.createOrder = catchAsync(async (req, res) => {
     total = subtotal;
     discount = null;
     appliedPromoCode = null;
+
+    // Apply promo to gym orders too
+    if (promoCode) {
+      const validatePromoCode = require("../utils/validatePromoCode");
+      const promoResult = await validatePromoCode(promoCode, workspaceCode);
+      if (!promoResult.valid) {
+        throw new AppError(promoResult.error, 400);
+      }
+
+      const { type, value, label } = promoResult.discount;
+      const rawAmount = type === "percentage" ? subtotal * (value / 100) : value;
+      const amount = Math.min(Math.round(rawAmount * 100) / 100, subtotal);
+
+      appliedPromoCode = promoResult.code;
+      discount = { type, value, amount, label };
+      total = Math.round((subtotal - amount) * 100) / 100;
+    }
   } else {
     // Regular orders: use standard pricing with menu date restrictions
     const result = await calculateOrderPricing({
