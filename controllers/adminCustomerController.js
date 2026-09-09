@@ -2,6 +2,8 @@ const User = require("../models/User");
 const Subscription = require("../models/Subscription");
 const Workspace = require("../models/Workspace");
 const Order = require("../models/Order");
+const Cart = require("../models/Cart");
+const RecurringOrder = require("../models/RecurringOrder");
 const AppError = require("../utils/appError");
 const catchAsync = require("../utils/catchAsync");
 
@@ -119,4 +121,34 @@ exports.updateCustomerStatus = catchAsync(async (req, res) => {
   }
 
   res.status(200).json({ success: true, customer: await getCustomerContext(user) });
+});
+
+exports.deleteCustomer = catchAsync(async (req, res) => {
+  const userId = req.params.id;
+
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new AppError("Customer not found", 404);
+  }
+
+  const userName = `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email;
+
+  // Delete user and all related data
+  await Promise.all([
+    User.findByIdAndDelete(userId),
+    Subscription.deleteMany({ user: userId }),
+    Order.deleteMany({ user: userId }),
+    Cart.deleteMany({ user: userId }),
+    RecurringOrder.deleteMany({ user: userId }),
+  ]);
+
+  res.status(200).json({
+    success: true,
+    message: `Customer ${userName} (${user.email}) permanently deleted`,
+    deletedCustomer: {
+      id: user._id,
+      email: user.email,
+      name: userName,
+    },
+  });
 });

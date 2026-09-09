@@ -41,6 +41,7 @@ const {
   listCustomers,
   getCustomer,
   updateCustomerStatus,
+  deleteCustomer,
 } = require("../controllers/adminCustomerController");
 const {
   listCompanies,
@@ -123,6 +124,7 @@ router.patch("/promo-codes/:id", updatePromoCode);
 router.delete("/promo-codes/:id", deletePromoCode);
 
 router.get("/customers", listCustomers);
+router.delete("/customers/:id", deleteCustomer);
 router.get("/customers/:id", getCustomer);
 router.patch("/customers/:id/status", updateCustomerStatus);
 
