@@ -235,12 +235,12 @@ exports.createOrder = catchAsync(async (req, res) => {
     },
   });
 
-  // Send admin email notification for new order
+  // Send admin email notification for new order (only if paid)
   try {
     const nodemailer = require("nodemailer");
     const adminEmail = process.env.ADMIN_NOTIFY_EMAIL;
 
-    if (adminEmail) {
+    if (adminEmail && paid) {
       const transporter = nodemailer.createTransport({
         service: "gmail",
         auth: {
@@ -671,12 +671,14 @@ exports.createGymBulkOrder = catchAsync(async (req, res) => {
   order.checkoutSessionId = session.id;
   await order.save();
 
-  // Send admin email notification for gym bulk order
+  // Send admin email notification for gym bulk order (only after Stripe payment confirmed)
+  // For now, we skip email here since payment is done via Stripe checkout
+  // Email will be triggered after payment confirmation through webhook or payment verification
   try {
     const nodemailer = require("nodemailer");
     const adminEmail = process.env.ADMIN_NOTIFY_EMAIL;
 
-    if (adminEmail) {
+    if (adminEmail && paid) {
       const transporter = nodemailer.createTransport({
         service: "gmail",
         auth: {
