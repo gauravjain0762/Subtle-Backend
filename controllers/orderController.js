@@ -394,7 +394,7 @@ exports.getOrderBySession = catchAsync(async (req, res) => {
   }
 
   if (!order.paid) {
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    const session = await getStripe().checkout.sessions.retrieve(sessionId);
     if (session.payment_status === "paid") {
       order.paid = true;
       await order.save();

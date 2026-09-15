@@ -74,7 +74,11 @@ exports.listCustomers = catchAsync(async (req, res) => {
   const [subscriptions, workspaces, orderCounts] = await Promise.all([
     Subscription.find({ user: { $in: userIds } }),
     Workspace.find({ code: { $in: codes } }),
-    Order.aggregate([{ $match: { user: { $in: userIds } } }, { $group: { _id: "$user", count: { $sum: 1 } } }]),
+    // Only count direct user-placed orders, not auto-generated recurring orders
+    Order.aggregate([
+      { $match: { user: { $in: userIds }, planType: { $in: ["one-time", "gym-bulk"] } } },
+      { $group: { _id: "$user", count: { $sum: 1 } } }
+    ]),
   ]);
 
   const subscriptionMap = Object.fromEntries(subscriptions.map((s) => [s.user.toString(), s]));
