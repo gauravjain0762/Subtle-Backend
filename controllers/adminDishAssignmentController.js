@@ -98,3 +98,34 @@ exports.unassignDishFromCompanies = catchAsync(async (req, res) => {
     remaining,
   });
 });
+
+exports.getAssignedDishes = catchAsync(async (req, res) => {
+  const { companyId } = req.params;
+
+  const company = await Workspace.findById(companyId);
+  if (!company) {
+    return res.status(404).json({
+      success: false,
+      error: "Company not found"
+    });
+  }
+
+  const assignments = await DishCompanyAssignment.find({ companyId }).populate("dishId");
+
+  const dishes = assignments
+    .filter(a => a.dishId) // Filter out null dishes
+    .map((a) => ({
+      id: a.dishId._id,
+      name: a.dishId.name,
+      description: a.dishId.description,
+      price: a.dishId.price,
+      image: a.dishId.images?.[0] || null,
+      menuType: a.dishId.menuId ? "custom" : "standard",
+      assignedDate: a.assignedAt?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0]
+    }));
+
+  res.status(200).json({
+    success: true,
+    dishes
+  });
+});

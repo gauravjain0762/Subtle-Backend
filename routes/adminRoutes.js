@@ -48,6 +48,7 @@ const {
   assignDishToCompanies,
   getAssignedCompanies,
   unassignDishFromCompanies,
+  getAssignedDishes,
 } = require("../controllers/adminDishAssignmentController");
 const {
   getStripeMode,
@@ -129,6 +130,7 @@ router.get("/customers/:id", getCustomer);
 router.patch("/customers/:id/status", updateCustomerStatus);
 
 router.get("/companies", listCompanies);
+router.get("/companies/:companyId/assigned-dishes", getAssignedDishes);
 router.post("/dishes/:dishId/assign-companies", assignDishToCompanies);
 router.get("/dishes/:dishId/assigned-companies", getAssignedCompanies);
 router.delete("/dishes/:dishId/unassign-companies", unassignDishFromCompanies);
