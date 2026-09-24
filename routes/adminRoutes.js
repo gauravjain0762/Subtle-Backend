@@ -13,6 +13,7 @@ const {
   listWorkspaces,
   updateWorkspaceStatus,
   deleteWorkspace,
+  deleteWorkspacePermanently,
 } = require("../controllers/adminWorkspaceController");
 const {
   listOrders,
@@ -99,6 +100,7 @@ router.delete("/workspace-requests/:id", deleteWorkspaceRequest);
 
 router.get("/workspaces", listWorkspaces);
 router.patch("/workspaces/:id", updateWorkspaceStatus);
+router.delete("/workspaces/:id/permanently", deleteWorkspacePermanently);
 router.delete("/workspaces/:id", deleteWorkspace);
 
 router.get("/orders/grouped/subscriptions", getGroupedSubscriptionOrders);

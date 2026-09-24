@@ -1,6 +1,7 @@
 const Workspace = require("../models/Workspace");
 const User = require("../models/User");
 const Order = require("../models/Order");
+const DishCompanyAssignment = require("../models/DishCompanyAssignment");
 const AppError = require("../utils/appError");
 const catchAsync = require("../utils/catchAsync");
 
@@ -75,4 +76,49 @@ exports.deleteWorkspace = catchAsync(async (req, res) => {
   }
 
   res.status(200).json({ success: true, message: "Workspace deleted" });
+});
+
+exports.deleteWorkspacePermanently = catchAsync(async (req, res) => {
+  const workspaceId = req.params.id;
+
+  const workspace = await Workspace.findById(workspaceId);
+  if (!workspace) {
+    throw new AppError("Company not found", 404);
+  }
+
+  const [orderCount, userCount, assignmentCount] = await Promise.all([
+    Order.countDocuments({ workspace: workspaceId }),
+    User.countDocuments({ workspaceCode: workspace.code }),
+    DishCompanyAssignment.countDocuments({ companyId: workspaceId }),
+  ]);
+
+  if (orderCount > 0) {
+    throw new AppError(`Cannot delete company with ${orderCount} orders. Please delete orders first.`, 400);
+  }
+
+  // Delete all dish assignments for this company
+  await DishCompanyAssignment.deleteMany({ companyId: workspaceId });
+
+  // Update all users belonging to this company (clear workspace reference)
+  if (userCount > 0) {
+    await User.updateMany(
+      { workspaceCode: workspace.code },
+      { $unset: { workspaceCode: "", workspaceName: "" } }
+    );
+  }
+
+  // Delete the workspace
+  await Workspace.findByIdAndDelete(workspaceId);
+
+  res.status(200).json({
+    success: true,
+    message: `Company "${workspace.name}" permanently deleted`,
+    deletedData: {
+      companyId: workspace._id,
+      companyName: workspace.name,
+      companyCode: workspace.code,
+      usersCleared: userCount,
+      dishAssignmentsRemoved: assignmentCount,
+    },
+  });
 });
